@@ -18,7 +18,7 @@ from brain_orchestrator.tools import ToolRegistry
 from dashboards.exporter import serve_prometheus
 from prod_core.configs.loader import ConfigLoader
 from research_lab.backtests.vectorbt_runner import load_shadow_strategies
-from prod_core.data import FeedHealthStatus, MarketDataFeed
+from prod_core.data import FeedHealthStatus, MarketDataFeed, MockMarketDataFeed
 from prod_core.exec.portfolio import PortfolioController
 from prod_core.monitor import TelemetryExporter, configure_logging
 from prod_core.persist import EquitySnapshotPayload, PersistDAO
@@ -136,6 +136,12 @@ def _build_state(dao: PersistDAO) -> Dict[str, float]:
     }
 
 
+def _env_flag(name: str) -> bool:
+    """Возвращает True, если переменная окружения содержит правду."""
+
+    return os.getenv(name, "").strip().lower() in {"1", "true", "yes", "on"}
+
+
 def _resolve_seconds(cli_value: float | None) -> float | None:
     if cli_value and cli_value > 0:
         return cli_value
@@ -164,8 +170,16 @@ def _resolve_cycles(cli_value: int | None) -> int | None:
     return None
 
 
-async def _run_paper_loop(*, max_seconds: float | None = None, max_cycles: int | None = None) -> None:
+async def _run_paper_loop(
+    *,
+    max_seconds: float | None = None,
+    max_cycles: int | None = None,
+    skip_feed_check: bool = False,
+    use_mock_feed: bool = False,
+) -> None:
     mode = ensure_paper_mode()
+    if use_mock_feed and mode != "paper":
+        raise RuntimeError("--use-mock-feed разрешён только в MODE=paper.")
     configure_logging()
 
     run_id = os.getenv("RUN_ID")
@@ -219,11 +233,16 @@ async def _run_paper_loop(*, max_seconds: float | None = None, max_cycles: int |
         shadow_logger=shadow_logger,
     )
 
-    feed = MarketDataFeed(
-        exchange_id=exchange_id,
-        symbols=specs,
-        use_websocket=os.getenv("ENABLE_WS", "1").lower() == "1",
-    )
+    feed: MarketDataFeed | MockMarketDataFeed
+    if use_mock_feed:
+        logger.warning("Активирован mock-фид: цикл работает на синтетических данных.")
+        feed = MockMarketDataFeed(symbols=specs)
+    else:
+        feed = MarketDataFeed(
+            exchange_id=exchange_id,
+            symbols=specs,
+            use_websocket=os.getenv("ENABLE_WS", "1").lower() == "1",
+        )
 
     stop_event = asyncio.Event()
 
@@ -242,15 +261,21 @@ async def _run_paper_loop(*, max_seconds: float | None = None, max_cycles: int |
     last_processed: Dict[Tuple[str, str], pd.Timestamp] = {}
     min_required_bars = min(spec.backfill_bars for spec in specs)
     base_sleep = min(spec.poll_interval_seconds for spec in specs)
+    sleep_interval = max(1.0, base_sleep)
+    if use_mock_feed:
+        sleep_interval = min(sleep_interval, 0.5)
 
     async with feed:
-        await asyncio.gather(*(feed.wait_ready(spec.name, tf) for spec in specs for tf in spec.timeframes))
-        logger.info(
-            "Фид инициализирован: %s | таймфреймы %s | exchange=%s",
-            ", ".join(spec.name for spec in specs),
-            ", ".join(sorted({tf for spec in specs for tf in spec.timeframes})),
-            exchange_id,
-        )
+        if skip_feed_check:
+            logger.warning("Пропускаем feed.wait_ready(): используем REST-backfill/мок-данные.")
+        else:
+            await asyncio.gather(*(feed.wait_ready(spec.name, tf) for spec in specs for tf in spec.timeframes))
+            logger.info(
+                "Фид инициализирован: %s | таймфреймы %s | exchange=%s",
+                ", ".join(spec.name for spec in specs),
+                ", ".join(sorted({tf for spec in specs for tf in spec.timeframes})),
+                exchange_id,
+            )
         start_ts = time.time()
         cycles = 0
         while not stop_event.is_set():
@@ -282,7 +307,7 @@ async def _run_paper_loop(*, max_seconds: float | None = None, max_cycles: int |
                 last_processed[key] = latest_ts
 
             cycles += 1
-            await asyncio.sleep(max(1.0, base_sleep))
+            await asyncio.sleep(sleep_interval)
 
     logger.info("Paper-loop остановлен.")
 
@@ -303,12 +328,31 @@ def main() -> None:
         default=None,
         help="ограничение по количеству циклов обработки",
     )
+    parser.add_argument(
+        "--skip-feed-check",
+        action="store_true",
+        help="пропускает ожидание готовности фида (только для отладки)",
+    )
+    parser.add_argument(
+        "--use-mock-feed",
+        action="store_true",
+        help="подменяет CCXT-фид синтетическим генератором (MODE=paper)",
+    )
     args = parser.parse_args()
     max_seconds = _resolve_seconds(args.max_seconds)
     max_cycles = _resolve_cycles(args.max_cycles)
+    skip_feed_check = bool(args.skip_feed_check) or _env_flag("SKIP_FEED_CHECK")
+    use_mock_feed = bool(args.use_mock_feed) or _env_flag("USE_MOCK_FEED")
 
     try:
-        asyncio.run(_run_paper_loop(max_seconds=max_seconds, max_cycles=max_cycles))
+        asyncio.run(
+            _run_paper_loop(
+                max_seconds=max_seconds,
+                max_cycles=max_cycles,
+                skip_feed_check=skip_feed_check,
+                use_mock_feed=use_mock_feed,
+            )
+        )
     except KeyboardInterrupt:
         logger.info("Paper runner остановлен пользователем.")
 

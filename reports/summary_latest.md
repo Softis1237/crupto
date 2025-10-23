@@ -1,28 +1,26 @@
-﻿# Итоговый отчёт (третьий проход)
+# Итоговый отчёт (обновление 24.10.2025)
 
 ## Обзор
-- Реализован persist-слой: SQLite DAO (`storage/crupto.db`), Parquet sink, экспортер `prod_core.persist.export_run`; добавлен скрипт `scripts/run_paper_60m.sh` для 60-минутного рана и выгрузки `reports/run_*/`.
-- Runner и агентский pipeline работают поверх CCXT ws+REST (`MarketDataFeed`), замеряют latency (seconds/ms) и пишут метрики в Prometheus/Grafana.
-- Telemetry расширена (equity, экспозиции, safe-mode, reject rate); Grafana содержит панели NodeGraph, Feed/Risk History, Latency, Performance, Exposure.
-- PortfolioController учитывает экспозиции, safe-mode и записывает сделки/позиции в БД; RiskManager и ExecutionAgent интегрированы с DAO.
-- Тестовый контур пополнен (`tests/test_persist_dao.py`, `tests/test_portfolio_limits.py`, обновлён `tests/test_risk_engine.py`), оформлен CI workflow (`.github/workflows/ci.yml`); документация и отчёты (README, DEV_SETUP, RUNBOOK, reports/03/05/06/07/08/09, TODO) приведены к текущему состоянию.
+- Runner обзавёлся флагами `--skip-feed-check` и `--use-mock-feed`; реализован `prod_core.data.mock_feed.MockMarketDataFeed`, что ускоряет локальные циклы и используется в новом интеграционном тесте `_run_paper_loop`.
+- Настройки `configs/symbols.yaml` адаптированы под paper-режим (backfill ≤ 180), `order_placer_ccxt` теперь подставляет `last_price` для лимитных ордеров, а Parquet sink умеет фолбэк в CSV при отсутствии `pyarrow`/`fastparquet`.
+- Покрытие тестами по `prod_core`/`brain_orchestrator`/`tools` достигло 79% (`pytest --cov`); добавлен `tests/test_integration_pipeline.py`, скорректирован `tests/test_risk_engine.py`, CI-конфигурация остаётся валидной.
+- Пробный paper-run `paper_20251024_015235` (~180 с, REST-backfill) завершился без ошибок: ордера не созданы, equity 10 000 USD, latency p95 (ms): market_regime 6.9, strategy_selection 1.8, risk_manager 3.7, execution 0.0, monitor 3.4; выгрузка сохранена в `reports/run_20251024_015235/`.
+- `prod_core.persist.export_run` корректно копирует логи с различной кодировкой, summary.md формируется автоматически.
 
 ## Создано / обновлено
-- Persist: `prod_core/persist/{schema.sql,dao.py,parquet_sink.py,export_run.py}`, пакетный экспорт и Parquet/CSV выгрузки.
-- Execution: `prod_core/exec/{broker_ccxt.py,portfolio.py}`, `tools/tools_execution_agent/order_placer_ccxt.py`, интеграция с DAO и safe-mode.
-- Мониторинг: `prod_core/monitor/telemetry.py`, `dashboards/grafana/{datasources.yml,dashboard.json}`, README_GRAFANA.
-- Тесты: `tests/test_persist_dao.py`, `tests/test_portfolio_limits.py`, обновлён `tests/test_risk_engine.py` (equity из DAO).
-- Research skeleton: `research_lab/backtests/vectorbt_runner.py`, `research_lab/pipeline_ci/champion_gate.py`.
-- Скрипты и инфраструктура: `scripts/run_paper_60m.sh`, `.github/workflows/ci.yml`, `pyproject.toml`, `requirements-dev.txt`.
+- `prod_core/data/mock_feed.py`, `prod_core/runner.py`, `prod_core/configs/loader.py`, `configs/symbols.yaml` — поддержка mock feed и уменьшенного backfill.
+- `tools/tools_execution_agent/order_placer_ccxt.py`, `prod_core/persist/parquet_sink.py`, `prod_core/persist/export_run.py` — корректная работа без pyarrow, копирование логов.
+- Новые/актуализированные тесты: `tests/test_integration_pipeline.py`, `tests/test_risk_engine.py`, coverage pipeline.
+- Артефакты прогонов: `reports/run_20251024_015235/{equity.csv,latency.csv,summary.md}`, `logs/paper_20251024_015235.log`.
 
 ## Блокеры / риски
-- 60-мин/24ч paper-прогоны ещё не выполнены → нет фактических отчётов и проверки SLA/gap-policy.
-- CI добавлен, но не прокручен (pytest/ruff/mypy требуют установки `requirements-dev`). Покрытие <70%.
-- Safe-mode и корреляции опираются на эвристику; отсутствует автоматическая очистка/алерты для SQLite.
-- Research pipeline остаётся заглушкой (нет реальных backtests/walk-forward/MC и champion артефактов).
+- Полноценные 60 мин и 24 ч paper-прогоны ещё впереди; текущий короткий ран не сгенерировал сделок, поэтому PnL/позиции не проверены.
+- Safe-mode по корреляциям пока статический; метрика `portfolio_safe_mode` не реагирует на реальные расчёты.
+- Champion/Challenger pipeline остаётся заглушкой (надо довести `vectorbt_runner.run_backtests` и `champion_gate.py`, определить формат артефактов).
+- Документация (README, docs/DEV_SETUP.md, docs/RUNBOOK.md, reports/06/09, TODO.md) не отражает новые флаги, mock-feed и процедуры cleanup.
 
 ## Следующие шаги (48 ч)
-1. Запустить `scripts/run_paper_60m.sh` (дальше 24h прогон), собрать отчёты `reports/run_*/`, обновить `reports/02_acceptance_checklist.md` и `summary`.
-2. Заполнить/проверить CI: `ruff`, `mypy`, `python -m pytest --cov`, добиться ≥70% покрытия, добавить интеграционный тест пайплайна.
-3. Провести валидацию safe-mode/correlation (исторические данные, алерты) и задокументировать реагирование (RUNBOOK).
-4. Продвинуть research pipeline: связать `vectorbt_runner` с реальными backtests, определить формат артефактов для `champion_gate` и отчётов.
+1. Провести 60‑мин и подготовительный 24‑часовой paper-run с реальным фидом, собрать отчёты, обновить чек-лист и summary.
+2. Дописать динамический safe-mode в `prod_core/exec/portfolio.py`, экспортировать метрику и задокументировать процедуру реагирования (RUNBOOK, reports/06_portfolio_risk.md).
+3. Обновить README, docs/DEV_SETUP.md, docs/RUNBOOK.md, TODO.md и reports/02/06/09 с учётом новых флагов, mock-feed и процедур очистки.
+4. Реализовать исследовательский pipeline (vectorbt → champion_gate), зафиксировать инструкцию в `reports/09_research_gate.md` и подготовить тестовые бэктесты.

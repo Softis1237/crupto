@@ -4,8 +4,6 @@ import argparse
 import os
 from collections import defaultdict
 from pathlib import Path
-import os
-import os
 from typing import Iterable, Mapping
 
 import pandas as pd
@@ -71,7 +69,11 @@ def export_run(db_path: str, out_dir: Path, log_path: str | None = None, run_id:
     if log_path:
         log_src = Path(log_path)
         if log_src.exists():
-            (out_dir / log_src.name).write_text(log_src.read_text(encoding="utf-8"), encoding="utf-8")
+            try:
+                contents = log_src.read_text(encoding="utf-8")
+            except UnicodeDecodeError:
+                contents = log_src.read_text(encoding="cp1251", errors="replace")
+            (out_dir / log_src.name).write_text(contents, encoding="utf-8")
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Экспорт результатов paper-прогона")

@@ -5,14 +5,14 @@
 - `max_concurrent_r_pct = 1.1`: потолок риска, который может быть добавлен одним планом.
 - `max_gross_exposure_pct = 300%`: совокупная абсолютная экспозиция относительно equity.
 - `max_net_exposure_pct = 150%`: чистая (directional) экспозиция, учитывая long/short направления.
-- `max_abs_correlation = 0.7`, `max_high_corr_positions = 2`: более двух сильно коррелирующих позиций запрещены.
-- Safe-mode: если вся корзина pending-позиций высоко коррелирует, разрешается не более `safe_mode_r_multiplier=0.5` от портфельного риска.
+- `max_abs_correlation = 0.65`, `max_high_corr_positions = 2`: более двух сильно коррелирующих позиций запрещены.
+- Safe-mode: если корзина активных/планируемых позиций высоко коррелирует, фактический риск-кап = `max_portfolio_r_pct × clamp(1 - (corr_max - 0.65)/(1 - 0.65), safe_mode_r_multiplier, 1.0)`. При `safe_mode_action=block` новые планы блокируются полностью.
 
 ## Корреляции
-- `PortfolioController.update_correlation` обновляет оценки парных корреляций (rolling окно 288 баров, пересчёт каждые 30 минут — значение из `reports/07`).
+- Rolling-окно: 1 час (порядка 12 баров по 5 м / 60 баров по 1 м). `PortfolioController.update_correlation` принимает рассчитанные значения и хранит их в `correlations`.
 - Частота пересчёта регулируется `correlation_refresh_seconds` (по умолчанию 1800s), чтобы не дергать биржу чрезмерно.
-- `PortfolioController` автоматически активирует safe-mode, когда все пары превышают порог и экспортирует метрику `portfolio_safe_mode`.
-- В режиме safe-mode новые планы отклоняются либо существенно урезаются (см. multiplier выше).
+- `PortfolioController.safe_mode_strength` отражает максимальную абсолютную корреляцию среди активных инструментов. При превышении порога safe-mode включается, `portfolio_safe_mode`=1, а `RiskController` использует динамический cap из формулы выше.
+- В режиме safe-mode важно зафиксировать причину (какие пары дали пики), при необходимости отключить менее устойчивые стратегии либо разнести активы.
 
 ## Поведение RiskManagerAgent
 - Перед расчётом планов вызывается `begin_cycle`: инициализация текущего риска/экспозиции из состояния портфеля.
@@ -30,4 +30,4 @@
 ## Проверки и мониторинг
 - Метрики `pnl_cum_r`, `winrate`, `avg_win_r`, `avg_loss_r`, `max_dd_r`, `execution_reject_rate` экспортируются в Prometheus.
 - Grafana dashboard содержит отдельные панели для Stage latency, Node Graph и Performance.
-- При активации safe-mode необходимо зафиксировать событие в RUNBOOK и уменьшить торговую активность (приоритет — митигация корреляций).
+- При алерте `PortfolioSafeModeStuck`: выгрузить rolling-корреляции за 1 ч (`storage/crupto.db` → таблица `positions` + ценовые ряды), проверить `safe_mode_strength`, скорректировать enable_map или лимиты.

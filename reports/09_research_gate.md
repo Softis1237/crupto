@@ -18,9 +18,30 @@
 7. Challenger: параллельный мониторинг; при деградации champion — автоматический свитч.
 
 ### Текущее состояние
-- Заготовлен модуль `research_lab/backtests/vectorbt_runner.py` (чтение CSV и заглушка пакетного бэктеста).
-- В `research_lab/pipeline_ci/champion_gate.py` описаны пороговые значения (`ChampionCriteria`) и функция `passes_gate`.
-- Следующий шаг (PROMPT #4): интеграция фактических backtests (vectorbt), walk-forward и Monte-Carlo на базе DAO/Parquet историй.
+- `research_lab/backtests/vectorbt_runner.py` умеет загружать кандидатов (`load_candidates`) и выполнять пакетный бэктест (`run_backtests`, временная заглушка вместо vectorbt) с сохранением CSV/JSON.
+- `research_lab/pipeline_ci/champion_gate.py` предоставляет `ChampionCriteria`, чтение результатов (`load_results`) и фильтрацию (`select_champions`, `passes_gate`) по порогам PF/DD/corr/trades.
+- Следующий шаг — заменить заглушку на фактические vectorbt-стратегии + walk-forward/MC.
+
+### Как запускать pipeline (sandbox)
+```bash
+python - <<'PY'
+from pathlib import Path
+from research_lab.backtests.vectorbt_runner import run_backtests
+from research_lab.pipeline_ci.champion_gate import select_champions
+
+results = run_backtests(
+    "configs/strategy_candidates.yaml",
+    start="2024-01-01",
+    end="2024-03-01",
+    save_csv=Path("research_lab/results/backtests.csv"),
+    save_json=Path("research_lab/results/backtests.json"),
+)
+champions = select_champions("research_lab/results/backtests.csv")
+print([c.candidate_id for c in champions])
+PY
+```
+- CSV/JSON результаты кладём в `research_lab/results/`.
+- После утверждения champions обновляем `configs/enable_map.yaml` и прокидываем challengers через `CHALLENGER_CONFIG`.
 
 ## Безопасность
 - ResearchAgent и инструменты работают в sandbox, без доступа к биржам/ключам.

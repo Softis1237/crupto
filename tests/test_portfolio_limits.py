@@ -1,3 +1,5 @@
+import pytest
+
 from prod_core.exec.portfolio import PortfolioController, PortfolioLimits
 
 
@@ -24,8 +26,12 @@ def test_safe_mode_triggers_on_high_correlation() -> None:
     controller.register_position("ETH", risk_pct=0.6, notional_pct=35.0, direction=1, leverage=1.0)
 
     assert controller.safe_mode is True
-    safe_cap = controller.limits.max_portfolio_r_pct * controller.limits.safe_mode_r_multiplier
-    assert safe_cap == controller.limits.max_portfolio_r_pct * controller.limits.safe_mode_r_multiplier
+    assert controller.safe_mode_strength == pytest.approx(0.85, rel=0.05)
+    assert controller._safe_mode_multiplier <= 1.0
+    assert controller._safe_mode_multiplier >= controller.limits.safe_mode_r_multiplier
+    assert controller._risk_cap_pct == pytest.approx(
+        controller.limits.max_portfolio_r_pct * controller._safe_mode_multiplier
+    )
 
 
 def test_safe_mode_blocks_when_action_block() -> None:
@@ -50,5 +56,7 @@ def test_safe_mode_exits_when_correlation_drops() -> None:
 
     controller.update_correlation("BTC", "ETH", 0.2)
     assert controller.safe_mode is False
+    assert controller._safe_mode_multiplier == pytest.approx(1.0)
+    assert controller._risk_cap_pct == pytest.approx(controller.limits.max_portfolio_r_pct)
     assert controller.can_allocate("ADA", additional_r_pct=0.1, notional_pct=5.0, direction=1)
 

@@ -129,6 +129,41 @@ def load_shadow_strategies(path: Path) -> List[TradingStrategy]:
     return [build_strategy(candidate) for candidate in load_candidates(path)]
 
 
+def run_backtests(
+    config_path: Path | str,
+    *,
+    start: str | None = None,
+    end: str | None = None,
+    save_csv: Path | None = None,
+    save_json: Path | None = None,
+) -> List[BacktestResult]:
+    """Запускает бэктесты для списка кандидатов (заглушка для vectorbt)."""
+
+    path = Path(config_path)
+    candidates = load_candidates(path)
+    # TODO: заменить run_batch на реальный vectorbt workflow (price loader + custom strategy).
+    results = run_batch(candidates)
+
+    if save_csv:
+        save_results(results, Path(save_csv))
+    if save_json:
+        records = [
+            {
+                "candidate_id": r.candidate_id,
+                "strategy": r.strategy,
+                "pf": r.pf,
+                "max_dd": r.max_dd,
+                "trades": r.trades,
+                "start": start,
+                "end": end,
+            }
+            for r in results
+        ]
+        Path(save_json).parent.mkdir(parents=True, exist_ok=True)
+        Path(save_json).write_text(json.dumps({"results": records}, indent=2), encoding="utf-8")
+    return results
+
+
 __all__ = [
     "CandidateConfig",
     "BacktestResult",
@@ -137,4 +172,5 @@ __all__ = [
     "save_results",
     "build_strategy",
     "load_shadow_strategies",
+    "run_backtests",
 ]

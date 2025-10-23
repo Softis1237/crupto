@@ -48,7 +48,8 @@ def test_size_position_respects_leverage() -> None:
 
 
 def test_size_position_uses_persist_equity(tmp_path) -> None:
-    dao = PersistDAO(tmp_path / "risk_engine.db")
+    run_id = "risk_engine_test"
+    dao = PersistDAO(tmp_path / "risk_engine.db", run_id=run_id)
     dao.initialize()
     dao.insert_equity_snapshot(
         EquitySnapshotPayload(
@@ -58,6 +59,7 @@ def test_size_position_uses_persist_equity(tmp_path) -> None:
             max_dd_r=0.0,
             exposure_gross=0.0,
             exposure_net=0.0,
+            run_id=run_id,
         )
     )
     engine = RiskEngine(dao=dao)

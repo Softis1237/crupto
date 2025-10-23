@@ -77,7 +77,7 @@ class SymbolEntry(BaseModel):
     type: Literal["spot", "perp"]
     timeframes: List[str] = Field(min_length=1)
     primary_timeframe: str
-    backfill_bars: int = Field(ge=2000, le=10000)
+    backfill_bars: int = Field(ge=50, le=2000)
     min_notional: float = Field(gt=0)
     max_leverage: float = Field(gt=0)
     quote_precision: int = Field(ge=0, le=10)

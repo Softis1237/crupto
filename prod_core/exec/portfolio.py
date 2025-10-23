@@ -28,7 +28,7 @@ class PortfolioLimits:
     max_concurrent_r_pct: float = 1.1
     max_gross_exposure_pct: float = 300.0
     max_net_exposure_pct: float = 150.0
-    max_abs_correlation: float = 0.7
+    max_abs_correlation: float = 0.65
     max_high_corr_positions: int = 2
     safe_mode_r_multiplier: float = 0.5
     correlation_window_bars: int = 288
@@ -61,6 +61,9 @@ class PortfolioController:
         self.correlations: Dict[Tuple[str, str], float] = defaultdict(float)
         self._last_corr_timestamp: Dict[Tuple[str, str], int] = defaultdict(int)
         self.safe_mode = False
+        self.safe_mode_strength = 0.0
+        self._safe_mode_multiplier = 1.0
+        self._risk_cap_pct = self.limits.max_portfolio_r_pct
         self._base_risk_pct = 0.0
         self._base_gross_exposure_pct = 0.0
         self._base_net_exposure_pct = 0.0
@@ -141,7 +144,7 @@ class PortfolioController:
         if additional_r_pct > self.limits.max_concurrent_r_pct:
             return False
 
-        if self.current_risk() + additional_r_pct > self.limits.max_portfolio_r_pct:
+        if self.current_risk() + additional_r_pct > self._risk_cap_pct:
             return False
 
         if self.gross_exposure_pct() + abs(notional_pct) > self.limits.max_gross_exposure_pct:
@@ -154,14 +157,13 @@ class PortfolioController:
         if self._count_highly_correlated(symbol) >= self.limits.max_high_corr_positions:
             return False
 
-        if self.safe_mode:
-            action = self.limits.safe_mode_action.lower()
-            if action == "block":
-                logger.info("Safe-mode blocks allocation for %s (run=%s)", symbol, self.dao.run_id if self.dao else 'n/a')
-                return False
-            safe_cap = self.limits.max_portfolio_r_pct * self.limits.safe_mode_r_multiplier
-            if self.current_risk() + additional_r_pct > safe_cap:
-                return False
+        if self.safe_mode and self.limits.safe_mode_action.lower() == "block":
+            logger.info(
+                "Safe-mode blocks allocation for %s (run=%s)",
+                symbol,
+                self.dao.run_id if self.dao else "n/a",
+            )
+            return False
         return True
 
     def register_position(
@@ -196,27 +198,80 @@ class PortfolioController:
         return count
 
     def _recompute_safe_mode(self) -> None:
-        """Обновляет safe-mode и логирует переходы."""
+        """Обновляет safe-mode, динамический риск-кап и логирует переходы."""
 
-        symbols = list(self.pending)
+        active_symbols = set(self.pending.keys())
+        if self.dao:
+            try:
+                for position in self.dao.fetch_positions():
+                    qty = float(position.get("qty", 0.0))
+                    if abs(qty) > 0:
+                        active_symbols.add(str(position["symbol"]))
+            except Exception:  # pragma: no cover - защитный контур
+                logger.exception("Не удалось получить позиции для safe-mode пересчёта.")
+
         threshold = self.limits.max_abs_correlation
-        if len(symbols) < 2:
+        if len(active_symbols) < 2:
             if self.safe_mode:
-                logger.info("Safe-mode exit: менее двух инструментов (run=%s)", self.dao.run_id if self.dao else "n/a")
+                logger.info(
+                    "Safe-mode exit: менее двух активных инструментов (run=%s)",
+                    self.dao.run_id if self.dao else "n/a",
+                )
             self.safe_mode = False
+            self.safe_mode_strength = 0.0
+            self._safe_mode_multiplier = 1.0
+            self._risk_cap_pct = self.limits.max_portfolio_r_pct
             return
 
+        symbols = sorted(active_symbols)
+        max_corr = 0.0
         for i, left in enumerate(symbols):
             for right in symbols[i + 1 :]:
-                corr = abs(self.correlations.get(self._correlation_key(left, right), 0.0))
-                if corr < threshold:
-                    if self.safe_mode:
-                        logger.info("Safe-mode exit: %s/%s corr=%.3f < %.2f (run=%s)", left, right, corr, threshold, self.dao.run_id if self.dao else "n/a")
-                    self.safe_mode = False
-                    return
-        if not self.safe_mode:
-            logger.warning("Safe-mode entry: все пары corr>=%.2f (run=%s)", threshold, self.dao.run_id if self.dao else "n/a")
+                key = self._correlation_key(left, right)
+                corr = abs(self.correlations.get(key, 0.0))
+                max_corr = max(max_corr, corr)
+
+        prev_state = self.safe_mode
+        prev_multiplier = self._safe_mode_multiplier
+        self.safe_mode_strength = max_corr
+
+        if max_corr < threshold:
+            if prev_state:
+                logger.info(
+                    "Safe-mode exit: corr_max=%.3f < %.2f (run=%s)",
+                    max_corr,
+                    threshold,
+                    self.dao.run_id if self.dao else "n/a",
+                )
+            self.safe_mode = False
+            self._safe_mode_multiplier = 1.0
+            self._risk_cap_pct = self.limits.max_portfolio_r_pct
+            return
+
+        if not prev_state:
+            logger.warning(
+                "Safe-mode entry: corr_max=%.3f ≥ %.2f (run=%s)",
+                max_corr,
+                threshold,
+                self.dao.run_id if self.dao else "n/a",
+            )
+
         self.safe_mode = True
+        excess = max(0.0, max_corr - threshold)
+        denom = max(1e-6, 1.0 - threshold)
+        reduction = min(1.0, excess / denom)
+        multiplier = max(self.limits.safe_mode_r_multiplier, min(1.0, 1.0 - reduction))
+        self._safe_mode_multiplier = multiplier
+        self._risk_cap_pct = self.limits.max_portfolio_r_pct * multiplier
+
+        if prev_state and abs(prev_multiplier - multiplier) > 1e-3:
+            logger.info(
+                "Safe-mode adjust: corr_max=%.3f multiplier=%.2f cap=%.2f%% (run=%s)",
+                max_corr,
+                multiplier,
+                self._risk_cap_pct,
+                self.dao.run_id if self.dao else "n/a",
+            )
     @staticmethod
     def _correlation_key(symbol_a: str, symbol_b: str) -> Tuple[str, str]:
         if symbol_a <= symbol_b:
@@ -343,3 +398,4 @@ class PortfolioController:
                 run_id=self.dao.run_id if self.dao else None,
             )
         )
+        self._recompute_safe_mode()

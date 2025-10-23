@@ -23,8 +23,13 @@ class ParquetSink:
             return self.base_path / f"{name}.parquet"
         frame = pd.DataFrame(data)
         path = self.base_path / f"{name}.parquet"
-        frame.to_parquet(path, index=False)
-        return path
+        try:
+            frame.to_parquet(path, index=False)
+            return path
+        except (ImportError, ValueError):
+            fallback = self.base_path / f"{name}.csv"
+            frame.to_csv(fallback, index=False)
+            return fallback
 
 
 __all__ = ["ParquetSink"]

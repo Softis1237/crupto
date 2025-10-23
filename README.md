@@ -11,7 +11,7 @@
 - `dashboards/` — Prometheus exporter helper + Grafana (`datasources.yml`, `dashboard.json`).
 - `docs/`, `reports/` — операционные инструкции, планы и чек-листы.
 - `scripts/` — запуск paper (`run_paper.sh`), 60-минутный прогон (`run_paper_60m.sh`), live-заглушка.
-- `tests/` — проверка фида, индикаторов, risk-engine, portfolio control.
+- `tests/` — проверка фида, индикаторов, risk-engine, portfolio control, интеграционный цикл `_run_paper_loop`.
 
 ## Быстрый старт (Python 3.13)
 1. Убедитесь, что Python 3.13.x установлен (Windows: py -3.13 --version, Linux/macOS: python3.13 --version).
@@ -49,10 +49,11 @@
    ```bash
    MODE=paper scripts/run_paper.sh
    ```
+   *Локальный smoke-тест*: `.venv/Scripts/python -m prod_core.runner --max-seconds 180 --skip-feed-check --use-mock-feed` (MODE=paper).
 ## Мониторинг и метрики
 - Prometheus endpoint: `http://localhost:${PROMETHEUS_PORT:-9108}/metrics` (поднимается runner'ом через `dashboards.exporter.serve_prometheus`).
 - Grafana: импортируйте `dashboards/grafana/datasources.yml` и `dashboard.json` (панели: Node Graph, Feed & Risk States, Stage Latency, Performance).
-- Ключевые метрики: `equity_usd`, `pnl_cum_r`, `max_dd_r`, `feed_health`, `stage_latency_ms`, `open_positions_count`, `exposure_gross_pct`, `execution_slippage_ratio`, `execution_reject_rate`.
+- Ключевые метрики: `equity_usd`, `pnl_cum_r`, `max_dd_r`, `feed_health`, `portfolio_safe_mode`, `stage_latency_ms`, `open_positions_count`, `exposure_gross_pct`, `execution_slippage_ratio`, `execution_reject_rate`.
 - Все телеметрические события дублируются в `reports/telemetry_events.csv` и `storage/crupto.db`. Экспорт Parquet/CSV осуществляется `scripts/run_paper_60m.sh` → `reports/run_*/`.
 
 ## Конфиги и безопасность

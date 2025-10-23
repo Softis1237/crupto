@@ -6,7 +6,7 @@ symbols:
       - 5m
       - 15m
     primary_timeframe: 15m
-    backfill_bars: 2000
+    backfill_bars: 180
     min_notional: 50
     max_leverage: 3
     quote_precision: 2
@@ -21,7 +21,7 @@ symbols:
       - 5m
       - 15m
     primary_timeframe: 15m
-    backfill_bars: 2000
+    backfill_bars: 180
     min_notional: 30
     max_leverage: 3
     quote_precision: 2
