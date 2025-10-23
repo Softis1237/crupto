@@ -1,0 +1,76 @@
+Инструкция для Codex (ИИ‑помощника) — как вести проект
+=====================================================
+
+Общее
+-----
+- Пиши код и документацию **на русском**.
+- Строгий стиль Python: snake_case для файлов/папок/модулей; PascalCase — только для классов.
+- Не меняй `prod_core/configs/governance.yaml` без явного указания. Любые правки риска — только через PR и тесты.
+- Не подключай Telegram и внешние интеграции на старте.
+- Любые химеры LLM в проде запрещены: ИИ‑слой только оркеструет и исследует, прод‑код детерминирован.
+
+Файлы и каталоги
+----------------
+- Агентов клади в `brain_orchestrator/agents/`.
+- Инструменты располагай в `tools/` по подпапкам агента: `tools/tools_<agent>_agent/` (snake_case).
+Примеры путей (строго snake_case):
+ tools/tools_market_regime_agent/
+ tools/tools_strategy_selection_agent/
+ tools/tools_risk_manager_agent/
+ tools/tools_execution_agent/
+ tools/tools_research_agent/
+ tools/tools_monitor_agent/
+- Боевое ядро — в `prod_core/` (data/indicators/strategies/risk/exec/monitor/configs).
+- Мониторинг/дашборды — `dashboards/grafana/`.
+- Исследования — `research_lab/` (sandbox: без сети и доступа к бирже).
+
+Capabilities
+------------
+- Используй только словарь способностей, указанный в ТЗ: calc_features, calc_volatility, detect_trend, classify_regime, load_enable_map, score_strategy, manage_cooldown, plan_position, plan_stops, guard_drawdown, check_liquidity, estimate_slippage, place_order, generate_candidate, run_backtest, run_walkforward, run_montecarlo, export_metrics, set_edge.
+- Каждый инструмент обязан объявить capability, agent, read_only, safety_tags и оценку cost_hint_ms.
+
+Тесты и качество
+----------------
+- Покрытие pytest ≥ 70% для prod_core/brain_orchestrator/tools.
+- Обязательные тесты: no‑lookahead, целостность свечей, risk‑engine (R‑sizing/ATR‑стоп/тейки/трейл), governor (daily‑lock/kill‑switch), переключение режимов, portfolio constraints.
+- Перед мержем: линтеры/типизация, статические проверки, e2e мок‑прогон.
+
+Prometheus и Grafana
+--------------------
+- Экспортируй метрики:
+  - agent_tool_state{agent,tool} ∈ {0,1,2,3}
+  - agent_tool_latency_seconds{agent,tool}
+  - agent_edge_state{src,dst} ∈ {1,2,3}
+  - feed_health, dd_state, daily_lock_state, regime_label
+- Цвета в Grafana: 1=зелёный, 2=жёлтый, 3=красный, 0/нет метрики=серый.
+- При добавлении агента/инструмента: обнови экспортер и `dashboards/grafana/dashboard.json` (Node Graph + Status History).
+
+Окружение и запуск
+------------------
+- Обновляй `.env.example` и README при появлении новых переменных.
+- Стандартизируй скрипты: `scripts/run_paper.sh` / `scripts/run_live.sh` → `python -m prod_core.runner`.
+- Таймзона по умолчанию: `Europe/Chisinau`.
+
+Champion/Challenger
+-------------------
+- Гейты промо в прод: PF (IS) ≥ 1.3; PF (OOS) ≥ 1.1; MaxDD ≤ 1.3×средней; corr ≤ 0.4; N_trades ≥ 200; MC‑устойчивость.
+- Pipeline обязателен: static→unit/integration→backtest→walk‑forward→OOS/MC→paper→canary→feature‑flag.
+
+Что запрещено
+-------------
+- Любые «горячие» правки риска/исполнения в проде.
+- Доступ ResearchAgent к реальным ключам/бирже/сети вне whitelist.
+- Игнорирование health‑метрик и data‑quality чеков.
+
+Коммиты и документация
+----------------------
+- Сообщения коммитов: [категория] кратко — «[tools] add volatility_calc with tests».
+- Любая новая способность/инструмент → обновить ТЗ (список capabilities) и README.
+- На каждое изменение дашборда — обновить `dashboards/grafana/README_GRAFANA.md` и приложить скрин/описание.
+
+Готовность к релизу (MVP)
+-------------------------
+- Paper‑режим ≥ 24 ч, без критических ошибок; переключение режимов видно в Grafana.
+- Risk‑governor срабатывает при превышении лимитов.
+- Все метрики и граф узлов/рёбер в Grafana подсвечиваются корректно.
+- E2E мок‑тест полного прохода цепочки агентов — зелёный.

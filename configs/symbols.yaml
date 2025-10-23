@@ -1,0 +1,31 @@
+symbols:
+  - name: BTC/USDT:USDT
+    type: perp
+    timeframes:
+      - 1m
+      - 5m
+      - 15m
+    primary_timeframe: 15m
+    backfill_bars: 2000
+    min_notional: 50
+    max_leverage: 3
+    quote_precision: 2
+    base_precision: 3
+    min_liquidity_usd: 2000000
+    max_spread_pct: 0.08
+    poll_interval_seconds: 5
+  - name: ETH/USDT:USDT
+    type: perp
+    timeframes:
+      - 1m
+      - 5m
+      - 15m
+    primary_timeframe: 15m
+    backfill_bars: 2000
+    min_notional: 30
+    max_leverage: 3
+    quote_precision: 2
+    base_precision: 3
+    min_liquidity_usd: 1500000
+    max_spread_pct: 0.1
+    poll_interval_seconds: 5

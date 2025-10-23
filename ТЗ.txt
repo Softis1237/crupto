@@ -1,0 +1,376 @@
+
+ТЗ: мультиагентная система для автотрейдинга (обновлённая версия 2025-10-22)
+=======================================================================
+
+Цели и ограничения
+------------------
+- Бюджет запуска: ~300 USD. Цель: выйти на 1 000 USD/мес (с потенциалом роста к 10 000 USD) за счёт стабильной стратегии и последующего масштабирования (копитрейдинг/подписки).
+- Проект предназначен для личного использования: **без Telegram и B2B-интеграций** на старте.
+- Основной стек: Python 3.11+, CCXT/официальные коннекторы биржи, pandas/numpy, pandas-ta или TA‑Lib, vectorbt для бэктестов, Prometheus + Grafana для мониторинга.
+- ИИ‑слой — **над** детерминированными бот‑стратегиями (оркестрация/исследования/отчёты), но **не** имеет права «горячо» менять риск/исполнение в проде.
+
+Архитектура и структура репозитория
+-----------------------------------
+- Базовые директории (snake_case строго):
+ prod_core/                  # боевое ядро (LLM не правит на горячую)
+    data/
+      feed.py                 # источники данных (ws/poll), нормализация
+      features.py             # расчёт фич из потоков
+    indicators/
+      tech.py                 # техиндикаторы (ATR/ADX/BB/RSI/Donchian/EMA...)
+    strategies/
+      base.py                 # интерфейс стратегии и типы Signal/Plan
+      breakout_4h.py
+      vol_exp_15m.py
+      range_rev_5m.py
+      funding_rev.py
+    risk/
+      governor.py             # дневной замок, kill-switch, health-гейты
+      engine.py               # R-sizing, ATR-стоп, тейки/трейл
+    exec/
+      broker_ccxt.py          # place/cancel, slicing, post-only, idempotency
+      portfolio.py            # лимиты экспозиции/корреляций/левериджа
+    monitor/
+      logger.py               # конфиг логов (loguru)
+      telemetry.py            # trades/PnL/DD/slippage → sqlite/csv + Prometheus
+      # notify_telegram.py    # зарезервировано (по умолчанию не используется)
+    configs/
+      governance.yaml         # ЖЁСТКИЕ лимиты риска (locked)
+      enable_map.yaml         # режим → активные стратегии (feature flags)
+      symbols.yaml            # пары, фильтры ликвидности/точности
+    runner.py                 # точка входа (MODE=paper|live)
+
+    brain_orchestrator/
+      agents/
+        market_regime_agent.py
+        strategy_selection_agent.py
+        risk_manager_agent.py
+        execution_agent.py
+        research_agent.py
+        monitor_agent.py
+        brain_agent.py          # координатор (мозг)
+      regimes.py
+      brain.py
+      validators.py
+    tools/                      # Инструменты сгруппированы по агентам
+      tools_market_regime_agent/
+        feature_loader.py
+        volatility_calc.py
+        trend_detector.py
+        regime_classifier.py
+        __init__.py
+      tools_strategy_selection_agent/
+        enable_map_loader.py
+        strategy_scorer.py
+        cooldown_manager.py
+        __init__.py
+      tools_risk_manager_agent/
+        position_sizer.py
+        stop_planner.py
+        dd_guard.py
+        __init__.py
+      tools_execution_agent/
+        liquidity_check.py
+        slippage_estimator.py
+        order_placer_ccxt.py
+        __init__.py
+      tools_research_agent/
+        generate_candidate.py
+        backtest_runner.py
+        walkforward_runner.py
+        montecarlo_runner.py
+        __init__.py
+      tools_monitor_agent/
+        prometheus_exporter.py
+        alert_telegram.py       # (пока не используется; зарезервировано)
+        __init__.py
+      base.py                   # BaseTool + registry
+      registry.py
+    dashboards/
+      grafana/
+        datasources.yml         # Prometheus datasource
+        dashboard.json          # Node Graph + Status panels (мозг‑дерево)
+      exporter.py               # dump метрик в Prometheus/CSV
+    research_lab/
+      dsl/                      # описание стратегий в конфиг‑виде (кандидаты)
+      generators/               # LLM/эвристика для гипотез
+      tests/                    # анти‑lookahead, юнит‑тесты кандидатов
+      backtests/                # скрипты vectorbt/backtesting.py
+      pipeline_ci/              # champion/challenger гейты
+    scripts/
+      run_paper.sh
+      run_live.sh
+    .env.example
+    README.md
+Ниже — подробные требования к каждой папке.
+-------------------------------------------
+
+data/
+-----
+Назначение: подключение к бирже (ws/poll), нормализация сырых данных, унификация символов/таймфреймов, базовые проверки целостности.
+
+feed.py
+- Источники: websockets (свечи), REST-пуллинг как fallback.
+- Поддержка: OHLCV, funding (перпетуалы), basis (спот-перп), orderbook snapshots.
+- Нормализация:
+  * columns = ['ts','open','high','low','close','volume','tf','symbol','source']
+  * символы: 'BINANCE:BTCUSDT.P' (пример для перпов)
+  * таймфреймы: '1m/5m/15m/1h/4h/1d' → ms
+- Буферизация: кольцевые буферы по tf (≥2000 баров), LRU-очистка.
+- Контроль времени: sync-дрейф ≤ 1500 мс; при превышении — health=bad.
+- Целостность: нет дубликатов; gap-fill только в paper.
+- Интерфейс:
+  * subscribe(symbols: list, tfs: list) -> None
+  * next_batch(tf) -> DataFrame
+  * latest(symbol, tf, n=1) -> DataFrame
+- Дополнительные требования: обработка лимитов API (rate limiting) и переподключений; кеширование полученных данных при кратковременных разрывах; возможность переключения на альтернативные источники (например, другую биржу) при недоступности текущей).
+\1
+
+features.py
+- Фичи: ATR, ADX, HV, EMA200, slope(EMA200), BB width, Donchian hi/lo, volume z-score, funding/basis дельты.
+- Выход: dict[str, DataFrame/ndarray] с одинаковым индексом ts.
+- Без look-ahead; NaN только на «разогреве».
+- Интерфейс: build_features(ohlcv_df, extra_streams) -> dict
+- Тесты: размеры, индексы, NaN-только-на-старте.
+
+indicators/
+-----------
+Назначение: «стандарт‑кит» индикаторов, протестированный, без сайд‑эффектов.
+
+tech.py
+- Функции: atr, adx, rsi, bb, ema, slope, donchian, hv, rolling_quantile.
+- Требования: не модифицируют вход; выровненный индекс; докстроки; типизация.
+- Тесты: эталонные значения, граничные случаи.
+
+strategies/
+-----------
+Назначение: генерация **сырого** торгового сигнала (без размеров) по строгим правилам.
+
+base.py
+- dataclass Signal(symbol, side, entry, tf, validity_ts, reason, meta)
+- dataclass Plan(symbol, side, qty, entry, stop, tps, trail, risk_r, meta)
+- class Strategy: name, symbols, tfs; generate(market_snapshot) -> list[Signal]
+
+breakout_4h.py
+- ТФ: 4h (+ подтверждение 1h); Donchian(20/55)+ADX>20+slope(EMA200)>0.
+- Выход: трейл 2×ATR, тейки 1R/2R, тайм‑стоп.
+
+vol_exp_15m.py
+- ТФ: 15m; ATR% и объём > квантиля 0.8 за окно N.
+- Выход: трейл 1.5×ATR, тайм‑стоп 2–3 часа.
+
+range_rev_5m.py
+- ТФ: 5–15m; от границ диапазона (BB/RSI) при range_lowvol.
+- Выход: тейки 0.5–1.0R, узкий стоп, тайм‑стоп ≤ 1 час.
+
+funding_rev.py
+- Экстремальный funding + basis; не использовать в тренде.
+
+risk/
+-----
+Назначение: нормировка размера позиции и защита портфеля.
+
+engine.py
+- R‑sizing ≤ 0.8% equity (base), динамический бонус per_trade_r_pct_green_bonus = 0.3 при дневном PnL ≥ +0.5 % (итого ≤ 1.1 %); размер ∝ 1/ATR.
+- ATR‑стоп; тейки 1R/2R; трейлинг; пирамидинг только в плюс.
+- Интерфейс: plan(signal, equity, context) -> Plan.
+
+governor.py
+- per_trade_r_pct_base=0.8, per_trade_r_pct_green_bonus=0.3, max_daily_loss_pct=1.8, kill_switch_drawdown_72h=3.5, leverage_cap=3.0, max_portfolio_r_pct=1.5, no_martingale=true, pyramiding=anti.
+- Health-гейты: NTP-дрейф, целостность свечей, потеря потоков.
+- Состояния в Prometheus: daily_lock_state, dd_state.
+
+exec/
+-----
+Назначение: размещение/управление ордерами + контроль портфельных ограничений.
+
+broker_ccxt.py
+- precision/tickSize/minQty/minNotional; limit/market; post-only.
+- Slicing; контроль спреда/тонких книг.
+- Idempotency: clientOrderId; обработка частичных филлов; повторы с бэкоффом.
+- Метрики: slippage, avg spread, reject rate.
+
+portfolio.py
+- Контроль экспозиции: max_concurrent_R, net/gross, леверидж.
+- Корреляции: использовано скользящее окно (например, 90 дней по дневным ценам) для оценки коэффициента Пирсона; не допускается одновременное открытие более 2–3 позиций с |ρ|>0.7. Если корреляция всех доступных инструментов превышает порог, новые позиции не открываются до снижения корреляции или закрытия существующих.
+- admit(plan) -> bool.
+
+monitor/
+--------
+Назначение: логирование, сохранение трейдов и метрик, экспорт в Prometheus.
+
+logger.py
+- loguru: формат, ротация, уровни; Trace‑ID.
+
+telemetry.py
+- trades.csv/sqlite (все поля сделки и планов), метрики:
+  * agent_tool_state, agent_tool_latency_seconds
+  * agent_edge_state
+  * feed_health, dd_state, daily_lock_state, regime_label
+- Отчёты: система должна формировать регулярные отчёты (например, CSV/JSON раз в сутки) с консолидированными трейдами, метриками PnL, DD, winrate и отправлять их пользователю. Логи хранятся не менее 6 месяцев для проведения аудита
+  * pnl_cum_r, winrate, avg_win_r, avg_loss_r, max_dd_r
+- Дашборды Grafana: Node Graph, Status History, Bar gauge, SingleStat.
+
+configs/
+--------
+Назначение: централизованные конфиги с валидацией.
+- Для каждого YAML‑файла создайте pydantic‑схему с обязательными полями, диапазонами и перечислениями. При загрузке некорректных значений система должна аварийно завершаться до начала торговли.
+
+governance.yaml (locked)
+- per_trade_r_pct_base: 0.8; per_trade_r_pct_green_bonus: 0.3; max_daily_loss_pct: 1.8; kill_switch_drawdown_72h: 3.5; leverage_cap: 3.0;
+  max_portfolio_r_pct: 1.5; no_martingale: true; pyramiding: "anti"; ntp_skew_ms: 1500; require_streams: ["candles","funding"].
+
+enable_map.yaml
+- regimes → список стратегий; switching_rules: min_bars_hold=6; cooldown_after_2_losses=3.
+
+symbols.yaml
+- symbol, type (spot/perp), min_qty, min_notional, min_vol, max_spread, allowed_tfs.
+
+runner.py
+---------
+Назначение: главный цикл и режимы работы.
+
+- MODE=paper|live (.env).
+- Последовательность: feed → features → regime → enable_map → strategies → risk → portfolio → exec → monitor.
+- Старт‑чеки: ключи/переменные, доступность биржи, Prometheus, governance.yaml.
+- Грейсфул‑шутдаун: закрытие позиций (live) или сохранение состояния (paper).
+- Архитектура должна быть полностью асинхронной: feed, вычисление фич, вызовы агентов, риск и исполнение работают через единый event‑loop; максимально допустимое время от прихода новой свечи до размещения ордера — 200 мс.
+
+Тесты и Acceptance
+------------------
+- Юнит‑тесты по модулям; e2e мок‑тест по цепочке.
+- MVP: paper ≥ 24 ч без критических ошибок; переключения режимов видны в Grafana; daily lock срабатывает; планы отклоняются по лимитам; покрытие pytest ≥ 70%.
+- Переход в live: paper‑торговля минимум 1 месяц (≥ 20 торговых сессий) с положительным profit factor ≥ 1.3 и максимальной просадкой ≤ 3 %; успешный форвард‑тест; подтверждение выполнения всех health‑гейтов; согласование через ревью.
+
+
+Агенты и их инструменты
+-----------------------
+- MarketRegimeAgent → инструменты в tools/tools_market_regime_agent/: feature_loader, volatility_calc, trend_detector, regime_classifier.
+- StrategySelectionAgent → tools/tools_strategy_selection_agent/: enable_map_loader, strategy_scorer (ликвидность/корреляции/экспозиция), cooldown_manager (гистерезис/тайм‑гейты).
+- RiskManagerAgent → tools/tools_risk_manager_agent/: position_sizer (R‑sizing, волат‑таргетирование), stop_planner (ATR‑стоп, трейл, частичные тейки), dd_guard (daily‑lock/kill‑switch).
+- ExecutionAgent → tools/tools_execution_agent/: liquidity_check, slippage_estimator, order_placer_ccxt (limit/market, slicing, post‑only).
+- ResearchAgent → tools/tools_research_agent/: generate_candidate (гипотезы), backtest_runner, walkforward_runner, montecarlo_runner.
+  Его работа должна включать строгий champion/challenger‑процесс:
+  * Генерация кандидатов стратегий по DSL и эвристикам.
+  * Бэктестирование на train/test и walk-forward периодах; затем проведение Монте‑Карло для оценки устойчивости.
+  * Критерии допуска: profit factor ≥ 1.5, win‑rate ≥ 55 %, максимальная просадка ≤ 3 % на трёх разных рыночных режимах.
+  * Новая стратегия допускается в prod только после ≥ 1 месяца paper‑теста, сравнения с текущим «champion» и утверждения через ревью.
+- MonitorAgent → tools/tools_monitor_agent/: prometheus_exporter (метрики агентов/инструментов/рёбер), alert_telegram (зарезервировано).
+- BrainAgent → координирует вызовы агентов и фиксирует рёбра принятия решений.
+
+Словарь capability для инструментов (обязательный)
+--------------------------------------------------
+- calc_features, calc_volatility, detect_trend, classify_regime
+- load_enable_map, score_strategy, manage_cooldown
+- plan_position, plan_stops, guard_drawdown
+- check_liquidity, estimate_slippage, place_order
+- generate_candidate, run_backtest, run_walkforward, run_montecarlo
+- export_metrics, set_edge
+
+Метрики качества агентов
+------------------------
+Каждый агент должен обладать набором KPI:
+- MarketRegimeAgent: accuracy/F1 по меткам режима на отложенной выборке; допустимый процент ложных переключений ≤ 5 %.
+- StrategySelectionAgent: доля успешных сигналов (winrate) и profit-factor выбранных стратегий; при снижении winrate < 50 % — отбор усиливается либо агент отправляется на переобучение.
+- RiskManagerAgent: соблюдение лимитов (max_portfolio_r_pct, daily loss) в 100 % случаев; время расчёта плана < 50 мс.
+- ExecutionAgent: среднее проскальзывание и reject rate по каждому символу; допустимое проскальзывание ≤ 0.05 % от цены.
+Эти метрики должны экспортироваться в Prometheus и отображаться на Grafana.
+
+Стандарты нейминга
+------------------
+- Только **snake_case** для файлов/папок; инструменты в `tools/tools_<agent>_agent/`.
+- Классы агентов PascalCase, имена модулей/функций — snake_case.
+- Конфиги YAML валидируются pydantic‑схемой (validators.py).
+
+Risk‑governor (locked)
+----------------------
+ per_trade_r_pct_base: 0.8 (процент капитала на базовую сделку).
+ per_trade_r_pct_green_bonus: 0.3 (динамический бонус, который прибавляется к базовому риску, если дневная прибыль ≥ +0.5 %; после первого отката дневного PnL бонус сбрасывается). Общий риск на сделку не должен превышать 1.1 %.
+ Max Daily Loss: 1.8 % (дневной локдаун).
+ Kill‑switch: −3.5 % за 72 ч (пауза до ручной разблокировки).
+ Leverage cap: 3.0; max_portfolio_r_pct: 1.5; no_martingale: true; pyramiding: anti (только в плюс).
+ Любые изменения — **только** через правку governance.yaml и ревью. ИИ не имеет права менять это «на горячую».
+- Динамическое снижение риска: при серии из ≥ 3 убыточных сделок подряд или при росте рыночной волатильности (ATR выше 90‑го процентиля) базовый риск per_trade_r_pct_base должен снижаться на 0.2 п. п.; возврат к базовому уровню происходит только после 5 прибыльных сделок или снижения волатильности.
+
+Стратегия достижения ~1 % в день
+--------------------------------
+Эта цель является ориентиром, а не гарантированным результатом. Система должна стремиться к повышению среднего выигрыша и контролю просадки, а не к простому увеличению плеча.
+
+- **Базовый риск**: per_trade_r_pct_base = 0.8 %. При достижении дневного PnL ≥ +0.5 % риск на последующие сделки можно увеличить на +0.3 п.п. (переменная per_trade_r_pct_green_bonus). Этот бонус действует только до первого отката, после чего риск возвращается к базовому уровню.
+- **Управление позицией**: используйте частичное снятие прибыли: 25 % позиции закрывается на 1R, ещё 25 % — на 2R, оставшиеся 50 % переводятся на трейлинг‑стоп 1.8×ATR. Стоп никогда не расширяется; после накопления +0.6R стоп переносится в точку безубытка.
+- **Анти‑мартингейл**: разрешён пирамидинг только в плюс. Например, при достижении +1R допускается добавить 0.3R к позиции с переносом совокупного стопа не ниже точки безубытка. Усреднение убыточной позиции запрещено.
+- **Setup scoring**: каждая потенциальная сделка оценивается по набору критериев (режим рынка, ликвидность/спред, совпадение со старшим таймфреймом, отсутствие новостей, объём/паттерн). Стратегия допускается к исполнению только при суммарной оценке ≥ 7 баллов из 10. Реализацию этой оценки обеспечивает StrategySelectionAgent.
+- **Гистерезис и cooldown**: режим должен удерживаться не менее 6 баров (min_bars_hold). После двух последовательных стопов для стратегии включается пауза на 3 бара (cooldown_after_2_losses).
+- Эти параметры должны быть отражены в `governance.yaml`, `engine.py` и `brain.py`, а также в тестах. Они обеспечивают стремление к ~1 % в день без чрезмерного риска.
+
+Data‑quality гейты (обязательные)
+---------------------------------
+- NTP‑дрейф времени ≤ 1500 мс; при превышении → PAUSE.
+- Целостность свечей: нет пропусков/дубликатов; санити‑чек таймфреймов.
+- Health потоков (candles, funding, orderbook) → метрика `feed_health` в Prometheus.
+- Любая потеря критичных данных → аварийная пауза и алерт.
+
+Режимы рынка и включение стратегий
+----------------------------------
+- RegimeAgent присваивает метку: trend_up, trend_down, range_lowvol, range_highvol, panic.
+- enable_map.yaml (feature flags) включает/выключает стратегии по режиму.
+- StrategySelectionAgent использует скоринг: ликвидность/спред/корреляции/экспозиция, гистерезис (min_bars_hold) и cooldown после серий стопов.
+
+Исполнение
+----------
+- ExecutionAgent проверяет спред/тик‑size/шаг количества, «тонкие» книги пропускаются.
+- Заявки дробятся (slicing) при больших размерах; используется post‑only, где выгодно.
+- Логирование проскальзывания и спреда по каждой сделке.
+
+Prometheus + Grafana (мозг‑дерево)
+----------------------------------
+- Метрики Prometheus:
+  - agent_tool_state{agent,tool}: 0/1/2/3 (off/ok/warn/error)
+  - agent_tool_latency_seconds{agent,tool}
+  - agent_edge_state{src,dst}: 1/2/3 (ok/warn/error)
+  - feed_health, dd_state, daily_lock_state, regime_label (как Gauge со значениями‑кодами)
+- Цветовая карта для Grafana:
+  - 1 → зелёный (OK), 2 → жёлтый (Warning), 3 → красный (Error), 0/нет метрики → серый
+- Дашборд: Node Graph (узлы: агенты/инструменты; рёбра: agent_edge_state), Status History (история статусов), Bar gauge (латентности), SingleStat (текущий режим/кол‑во активных стратегий/дневная потеря).
+- Любое добавление агента/инструмента → обновить экспортер и дашборд (см. инструкцию Codex).
+
+Окружение и запуск
+------------------
+- .env (пример прилагается):
+  EXCHANGE=binance
+  API_KEY=...
+  API_SECRET=...
+  MODE=paper                 # или live
+  PROMETHEUS_PORT=9108
+  OPENAI_API_KEY=...         # если ResearchAgent использует LLM
+  TZ=Europe/Chisinau
+  LOG_LEVEL=INFO
+- Скрипты:
+  scripts/run_paper.sh → python -m prod_core.runner
+  scripts/run_live.sh  → python -m prod_core.runner
+- README должен содержать шаги установки, требования и команды запуска.
+
+Champion/Challenger (допуск в прод)
+-----------------------------------
+- Пороговые метрики (рекомендуется начать с):
+  - PF (in‑sample) ≥ 1.3, PF (out‑of‑sample) ≥ 1.1
+  - MaxDD кандидата ≤ 1.3 × средней портфельной DD
+  - Корреляция доходности с существующим портфелем ≤ 0.4
+  - N_trades ≥ 200; учтены комиссии и оценён сллипедж
+  - Монте‑Карло устойчивость (перемешивание сделок, варьирование сллипеджа)
+- Pipeline: static checks → unit/integration → backtest → walk‑forward → out‑of‑sample/MC → paper (live sim) → canary (0.05% R) → промо через feature‑flags.
+- ResearchAgent работает **только** в sandbox (без доступа к бирже и сети вне whitelist).
+
+Acceptance‑критерии MVP
+-----------------------
+- Paper‑режим стабильно крутится ≥ 24 ч, без критических ошибок.
+- В Prometheus публикуются метрики агентов, граф в Grafana корректно подсвечивает узлы/рёбра.
+- Регим‑детектор переключает режимы и это видно в дашборде.
+- Risk‑governor блокирует торговлю при достижении max_daily_loss.
+- E2E‑тест: полный проход MarketRegime→StrategySelection→Risk→Execution на мок‑данных.
+- Покрытие тестами (pytest) ≥ 70% модулей prod_core/brain_orchestrator/tools.
+
+Будущее расширение
+------------------
+- Добавить PatternDiscovery/RedTeam/SelfCritique/Arbiter/Memory по мере готовности.
+- Визуальный анализ графиков через мультимодальные модели 

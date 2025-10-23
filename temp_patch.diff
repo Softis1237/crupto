@@ -1,0 +1,13 @@
+﻿*** Begin Patch
+*** Update File: reports/05_data_resilience.md
+@@
+ ## Переподключения
+ - WS: три попытки reconnection с jitter, затем переключение на REST-поллинг.
+ - REST: fallback на альтернативный endpoint (spot ↔ futures) при кодах 5xx.
+ - При полном недоступе источника >5мин → feed_health=0, daily_lock_state=1.
++
++## Персистентность и выгрузки
++- Все заявки, трейды, позиции и equity снапшоты сохраняются в SQLite (`storage/crupto.db`).
++- Экспорт отчётов осуществляется через `scripts/run_paper_60m.sh` → `prod_core.persist.export_run` (Parquet + CSV + summary.md).
++- Временные ряды латентности пишутся в таблицу `latency` и доступны для анализа (Prometheus + parquet).
+*** End Patch

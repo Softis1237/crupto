@@ -1,0 +1,28 @@
+# Жёсткие параметры риск-менеджмента (paper-режим)
+paper:
+  risk:
+    per_trade_r_pct_base: 0.8
+    risk_bonus_threshold_pct: 0.5
+    risk_bonus_add: 0.3
+    max_per_trade_r_pct: 1.1
+    max_daily_loss_pct: 1.8
+    kill_switch_drawdown_72h: 3.5
+    leverage_cap: 3.0
+    max_portfolio_r_pct: 1.5
+    volatility_threshold: 0.04
+    volatility_risk_step: 0.2
+    losing_streak_lookback: 5
+    min_r_pct_floor: 0.25
+  dynamic_risk:
+    losing_streak_reduction:
+      "2": 0.9
+      "3": 0.8
+      "4": 0.7
+      "5": 0.6
+    volatility_reduction:
+      mild: 0.85
+      severe: 0.7
+  governance:
+    cooling_period_minutes: 60
+    enable_daily_lock: true
+    enable_kill_switch: true

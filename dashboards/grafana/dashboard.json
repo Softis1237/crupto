@@ -1,0 +1,187 @@
+{
+  "title": "crupto paper overview",
+  "uid": "crupto-paper",
+  "style": "dark",
+  "schemaVersion": 38,
+  "version": 1,
+  "refresh": "10s",
+  "time": {
+    "from": "now-6h",
+    "to": "now"
+  },
+  "panels": [
+    {
+      "id": 1,
+      "title": "Agent Topology",
+      "type": "nodeGraph",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": { "h": 12, "w": 12, "x": 0, "y": 0 },
+      "targets": [
+        { "refId": "A", "expr": "agent_tool_state" },
+        { "refId": "B", "expr": "agent_edge_state" }
+      ],
+      "options": {
+        "showZoom": true,
+        "edges": {
+          "mainStatUnit": "none",
+          "secondaryStatDisplayMode": "none"
+        },
+        "nodes": {
+          "mainStatUnit": "none",
+          "secondaryStatDisplayMode": "none"
+        }
+      }
+    },
+    {
+      "id": 2,
+      "title": "Feed & Risk States",
+      "type": "status-history",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": { "h": 12, "w": 12, "x": 12, "y": 0 },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "right"
+        },
+        "tooltip": {
+          "mode": "single"
+        }
+      },
+      "targets": [
+        { "refId": "A", "expr": "feed_health" },
+        { "refId": "B", "expr": "daily_lock_state" },
+        { "refId": "C", "expr": "dd_state" },
+        { "refId": "D", "expr": "regime_label" }
+      ]
+    },
+    {
+      "id": 3,
+      "title": "Latency by Stage (p95 ms)",
+      "type": "bargauge",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 12 },
+      "options": {
+        "displayMode": "gradient",
+        "orientation": "horizontal"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "histogram_quantile(0.95, sum(rate(stage_latency_ms_bucket[5m])) by (le, stage))"
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "title": "Equity & Risk Time Series",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 12 },
+      "fieldConfig": {
+        "defaults": {
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "red", "value": 0 }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "targets": [
+        { "refId": "A", "expr": "equity_usd" },
+        { "refId": "B", "expr": "pnl_cum_r" },
+        { "refId": "C", "expr": "max_dd_r" }
+      ]
+    },
+    {
+      "id": 5,
+      "title": "Open Positions",
+      "type": "stat",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": { "h": 6, "w": 4, "x": 0, "y": 20 },
+      "targets": [
+        { "refId": "A", "expr": "open_positions_count" }
+      ],
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "center"
+      }
+    },
+    {
+      "id": 6,
+      "title": "Exposure Gross %",
+      "type": "stat",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": { "h": 6, "w": 4, "x": 4, "y": 20 },
+      "targets": [
+        { "refId": "A", "expr": "exposure_gross_pct" }
+      ],
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "center"
+      }
+    },
+    {
+      "id": 7,
+      "title": "Exposure Net %",
+      "type": "stat",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": { "h": 6, "w": 4, "x": 8, "y": 20 },
+      "targets": [
+        { "refId": "A", "expr": "exposure_net_pct" }
+      ],
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "center"
+      }
+    },
+    {
+      "id": 8,
+      "title": "Portfolio Safe Mode",
+      "type": "stat",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": { "h": 6, "w": 4, "x": 12, "y": 20 },
+      "targets": [
+        { "refId": "A", "expr": "portfolio_safe_mode" }
+      ],
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "center"
+      }
+    }
+  ],
+  "templating": {
+    "list": []
+  }
+}

@@ -1,0 +1,15 @@
+trend_up:
+  - breakout_4h
+  - vol_exp_15m
+trend_down:
+  - breakout_4h
+  - vol_exp_15m
+range_lowvol:
+  - range_rev_5m
+  - funding_rev
+range_highvol:
+  - vol_exp_15m
+  - range_rev_5m
+  - funding_rev
+panic:
+  - funding_rev

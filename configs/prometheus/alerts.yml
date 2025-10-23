@@ -1,0 +1,56 @@
+﻿groups:
+  - name: crupto-paper
+    rules:
+      - alert: FeedHealthDegraded
+        expr: avg_over_time(feed_health[30s]) < 0.5
+        for: 30s
+        labels:
+          severity: warning
+        annotations:
+          summary: "Feed health degraded"
+          description: "feed_health remained below 1 for 30s (avg={{ printf \"%.2f\" avg_over_time(feed_health[30s]) }}). Check exchange connectivity or restart the feed." 
+
+      - alert: DrawdownCritical
+        expr: max_dd_r >= 1.5
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Drawdown above limit"
+          description: "max_dd_r={{ printf \"%.2f\" max_dd_r }}R exceeds the configured limit (1.50R). Consider engaging the kill switch and reviewing recent trades." 
+
+      - alert: DailyLockEngaged
+        expr: daily_lock_state{reason!="limits_ok"} == 1
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Daily lock engaged"
+          description: "Risk governor locked trading due to {{ $labels.reason }}. Investigate governance logs and reset only after manual review." 
+
+      - alert: PortfolioSafeModeStuck
+        expr: portfolio_safe_mode == 1
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Portfolio safe-mode active"
+          description: "Safe-mode has been active for over 5 minutes. Review correlations and exposure limits before resuming normal sizing." 
+
+      - alert: RunnerHeartbeatLost
+        expr: (time() - runner_last_cycle_ts > 90) or absent(runner_last_cycle_ts)
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Runner heartbeat lost"
+          description: "No orchestration cycle heartbeat for >90s. Validate the paper runner process and restart if necessary." 
+
+      - alert: MetricsDeadman
+        expr: absent(feed_health)
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Prometheus metrics missing"
+          description: "Prometheus no longer scrapes feed_health. Confirm the exporter on :${PROMETHEUS_PORT:-9108} is reachable." 
