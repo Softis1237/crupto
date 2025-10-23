@@ -1,4 +1,4 @@
-﻿"""Экспорт телеметрии в Prometheus и вспомогательные стореджи."""
+"""Экспорт телеметрии в Prometheus и вспомогательные стореджи."""
 
 from __future__ import annotations
 
@@ -107,7 +107,7 @@ class TelemetryExporter:
         )
         self.portfolio_safe_mode = Gauge(
             "portfolio_safe_mode",
-            "��������� safe-mode �������� (1 �������).",
+            "Признак safe-mode портфеля (1 включён).",
             registry=self.registry,
         )
         self.runner_last_cycle_ts = Gauge(
@@ -146,7 +146,7 @@ class TelemetryExporter:
         self.dd_state.set(drawdown_pct)
 
     def record_daily_lock(self, locked: bool, reason: str | None = None) -> None:
-        """�������� ���ﭨ� daily-lock."""
+        """Обновляет состояние daily-lock."""
 
         reason_label = (reason or "limits_ok").strip() or "limits_ok"
         if not locked:
@@ -203,7 +203,7 @@ class TelemetryExporter:
         self.portfolio_safe_mode.set(1 if enabled else 0)
 
     def record_cycle_heartbeat(self) -> None:
-        """�������� ������� �������� ����⮢ (��� deadman-alert)."""
+        """Записывает heartbeat цикла оркестратора (для deadman‑alert)."""
 
         self.runner_last_cycle_ts.set(time.time())
 
@@ -241,7 +241,7 @@ class TelemetryExporter:
             self.avg_win_r.set(0.0)
             self.avg_loss_r.set(0.0)
     def apply_alert_overrides(self) -> None:
-        """�������� ������������ alert override'ы (��� ��������)."""
+        """Обрабатывает тестовые alert override’ы (для отладки)."""
 
         feed_override = os.getenv("ALERT_TEST_FEED_HEALTH")
         if feed_override:

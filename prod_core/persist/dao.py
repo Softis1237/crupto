@@ -171,7 +171,7 @@ class PersistDAO:
         meta: dict[str, Any] | None = None,
         run_id: str | None = None,
     ) -> None:
-        """��������� ������ ������ �� client_id."""
+        """Обновляет статус заявки по client_id."""
 
         updates: List[str] = ["status = ?", "updated_at = strftime('%s','now')"]
         params: List[Any] = [status]
@@ -230,7 +230,7 @@ class PersistDAO:
             )
 
     def insert_trade(self, payload: TradePayload) -> int:
-        """��������� ��?������ �� �?���?�?���%����'."""
+        """Вставляет запись о сделке."""
 
         run_id = self._resolve_run_id(payload.run_id)
         with self.transaction() as conn:
@@ -256,7 +256,7 @@ class PersistDAO:
             return int(cursor.lastrowid)
 
     def insert_equity_snapshot(self, payload: EquitySnapshotPayload) -> None:
-        """������� equity � ��-����."""
+        """Вставляет/обновляет снимок equity."""
 
         run_id = self._resolve_run_id(payload.run_id)
         with self.transaction() as conn:
@@ -278,7 +278,7 @@ class PersistDAO:
             )
 
     def insert_latency(self, payload: LatencyPayload) -> None:
-        """���࠭�� ����৭�� ��������."""
+        """Вставляет запись о латентности."""
 
         run_id = self._resolve_run_id(payload.run_id)
         with self.transaction() as conn:
@@ -291,7 +291,7 @@ class PersistDAO:
             )
 
     def fetch_latency(self, limit: int | None = None, run_id: str | None = None) -> List[Dict[str, Any]]:
-        """�����র���� ������� latency."""
+        """Возвращает события латентности."""
 
         resolved_run_id = self._resolve_run_id(run_id)
         query = "SELECT * FROM latency WHERE run_id = ? ORDER BY ts DESC"
@@ -312,7 +312,7 @@ class PersistDAO:
         status: str | None = None,
         symbol: str | None = None,
     ) -> List[Dict[str, Any]]:
-        """Return orders for the specified run."""
+        """Возвращает заявки для указанного run."""
 
         resolved_run_id = self._resolve_run_id(run_id)
         query = ["SELECT * FROM orders WHERE run_id = ?"]
@@ -340,7 +340,7 @@ class PersistDAO:
         symbol: str | None = None,
         order_id: int | None = None,
     ) -> List[Dict[str, Any]]:
-        """Return trades for the specified run."""
+        """Возвращает сделки для указанного run."""
 
         resolved_run_id = self._resolve_run_id(run_id)
         query = ["SELECT * FROM trades WHERE run_id = ?"]
@@ -361,7 +361,7 @@ class PersistDAO:
         return self._rows_to_dicts(rows)
 
     def fetch_positions(self, *, run_id: str | None = None) -> List[Dict[str, Any]]:
-        """Return open positions for the specified run."""
+        """Возвращает открытые позиции для указанного run."""
 
         resolved_run_id = self._resolve_run_id(run_id)
         with self._connect() as conn:
@@ -372,7 +372,7 @@ class PersistDAO:
         return [self._row_to_dict(row) for row in rows]
 
     def fetch_position(self, symbol: str, *, run_id: str | None = None) -> Optional[Dict[str, Any]]:
-        """Return a single position by symbol."""
+        """Возвращает позицию по символу."""
 
         resolved_run_id = self._resolve_run_id(run_id)
         with self._connect() as conn:
@@ -383,7 +383,7 @@ class PersistDAO:
         return self._row_to_dict(row) if row else None
 
     def clear_position(self, symbol: str, *, run_id: str | None = None) -> None:
-        """Delete a position for the specified run."""
+        """Удаляет позицию для указанного run."""
 
         resolved_run_id = self._resolve_run_id(run_id)
         with self.transaction() as conn:
@@ -393,7 +393,7 @@ class PersistDAO:
             )
 
     def fetch_equity_last(self, run_id: str | None = None) -> Optional[Dict[str, Any]]:
-        """���������� ��������� equity snapshot."""
+        """Возвращает последний снимок equity."""
 
         resolved_run_id = self._resolve_run_id(run_id)
         with self._connect() as conn:
@@ -401,7 +401,7 @@ class PersistDAO:
         return dict(row) if row else None
 
     def fetch_equity_history(self, limit: int | None = None, run_id: str | None = None) -> List[Dict[str, Any]]:
-        """���������� ������� equity."""
+        """Возвращает историю equity."""
 
         resolved_run_id = self._resolve_run_id(run_id)
         query = "SELECT * FROM equity_snapshots WHERE run_id = ? ORDER BY ts DESC"
