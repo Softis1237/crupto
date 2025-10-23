@@ -8,7 +8,7 @@ from typing import Any, Final, Literal, Protocol
 
 import pandas as pd
 
-from brain_orchestrator import MarketRegime
+from brain_orchestrator.regimes import MarketRegime
 
 SignalSide = Literal["long", "short", "flat"]
 

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import argparse
 import asyncio
 import logging
 import os
@@ -135,7 +136,35 @@ def _build_state(dao: PersistDAO) -> Dict[str, float]:
     }
 
 
-async def _run_paper_loop() -> None:
+def _resolve_seconds(cli_value: float | None) -> float | None:
+    if cli_value and cli_value > 0:
+        return cli_value
+    env_value = os.getenv("RUN_MAX_SECONDS")
+    if env_value:
+        try:
+            parsed = float(env_value)
+            if parsed > 0:
+                return parsed
+        except ValueError:
+            logger.warning("Игнорируем некорректное значение RUN_MAX_SECONDS=%s", env_value)
+    return None
+
+
+def _resolve_cycles(cli_value: int | None) -> int | None:
+    if cli_value and cli_value > 0:
+        return cli_value
+    env_value = os.getenv("RUN_MAX_CYCLES")
+    if env_value:
+        try:
+            parsed = int(env_value)
+            if parsed > 0:
+                return parsed
+        except ValueError:
+            logger.warning("Игнорируем некорректное значение RUN_MAX_CYCLES=%s", env_value)
+    return None
+
+
+async def _run_paper_loop(*, max_seconds: float | None = None, max_cycles: int | None = None) -> None:
     mode = ensure_paper_mode()
     configure_logging()
 
@@ -205,7 +234,10 @@ async def _run_paper_loop() -> None:
     loop = asyncio.get_running_loop()
     for sig_name in ("SIGINT", "SIGTERM"):
         if hasattr(signal, sig_name):
-            loop.add_signal_handler(getattr(signal, sig_name), _graceful_shutdown)
+            try:
+                loop.add_signal_handler(getattr(signal, sig_name), _graceful_shutdown)
+            except NotImplementedError:
+                logger.debug("Signal handlers are not supported on this platform for %s.", sig_name)
 
     last_processed: Dict[Tuple[str, str], pd.Timestamp] = {}
     min_required_bars = min(spec.backfill_bars for spec in specs)
@@ -219,7 +251,15 @@ async def _run_paper_loop() -> None:
             ", ".join(sorted({tf for spec in specs for tf in spec.timeframes})),
             exchange_id,
         )
+        start_ts = time.time()
+        cycles = 0
         while not stop_event.is_set():
+            if max_seconds and max_seconds > 0 and (time.time() - start_ts) >= max_seconds:
+                logger.info("Достигнут лимит времени %.1f с, завершаемся.", max_seconds)
+                break
+            if max_cycles and max_cycles > 0 and cycles >= max_cycles:
+                logger.info("Достигнут лимит по числу циклов %d, завершаемся.", max_cycles)
+                break
             snapshot = feed.snapshot(min_bars=min_required_bars)
             telemetry.record_feed_health(_aggregate_health(feed.status()))
 
@@ -241,6 +281,7 @@ async def _run_paper_loop() -> None:
                 )
                 last_processed[key] = latest_ts
 
+            cycles += 1
             await asyncio.sleep(max(1.0, base_sleep))
 
     logger.info("Paper-loop остановлен.")
@@ -249,8 +290,25 @@ async def _run_paper_loop() -> None:
 def main() -> None:
     """Основная точка входа CLI."""
 
+    parser = argparse.ArgumentParser(description="Paper-runner crupto.")
+    parser.add_argument(
+        "--max-seconds",
+        type=float,
+        default=None,
+        help="ограничение по времени выполнения (секунды)",
+    )
+    parser.add_argument(
+        "--max-cycles",
+        type=int,
+        default=None,
+        help="ограничение по количеству циклов обработки",
+    )
+    args = parser.parse_args()
+    max_seconds = _resolve_seconds(args.max_seconds)
+    max_cycles = _resolve_cycles(args.max_cycles)
+
     try:
-        asyncio.run(_run_paper_loop())
+        asyncio.run(_run_paper_loop(max_seconds=max_seconds, max_cycles=max_cycles))
     except KeyboardInterrupt:
         logger.info("Paper runner остановлен пользователем.")
 

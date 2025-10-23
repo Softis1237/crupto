@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import Dict, List, Literal
 
 import yaml
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, RootModel, field_validator, model_validator
 
 from prod_core.data import SymbolFeedSpec
 from prod_core.data.feed import timeframe_to_timedelta
@@ -63,13 +63,13 @@ class GovernanceConfig(BaseModel):
     paper: PaperGovernance
 
 
-class EnableMapConfig(BaseModel):
-    __root__: Dict[str, List[str]]
+class EnableMapConfig(RootModel[Dict[str, List[str]]]):
+    """Root-only config that maps regimes to strategy lists."""
 
-    @field_validator("__root__")
-    @classmethod
-    def ensure_lowercase(cls, value: Dict[str, List[str]]) -> Dict[str, List[str]]:
-        return {key.lower(): strategies for key, strategies in value.items()}
+    @model_validator(mode="after")
+    def ensure_lowercase(self) -> "EnableMapConfig":
+        self.root = {key.lower(): strategies for key, strategies in self.root.items()}
+        return self
 
 
 class SymbolEntry(BaseModel):

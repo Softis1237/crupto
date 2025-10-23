@@ -138,6 +138,19 @@ class CCXTBroker:
                 )
                 continue
 
+            if request.order_type == "limit" and request.price is None:
+                logger.error(
+                    "Ошибка создания лимитного ордера: не указана цена (symbol=%s, side=%s, qty=%.6f)",
+                    request.symbol, request.side, request.quantity
+                )
+                return [OrderResult(
+                    client_id=client_id,
+                    status="rejected",
+                    filled=0.0,
+                    avg_price=None,
+                    raw={"error": "Price is required for limit orders"}
+                )]
+
             params = {"postOnly": request.post_only}
             try:
                 response = self._client.create_order(

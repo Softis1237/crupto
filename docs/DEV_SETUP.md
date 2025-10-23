@@ -80,5 +80,8 @@ pytest --cov=prod_core --cov=brain_orchestrator --cov=tools --cov-report=term-mi
 ## Полезные команды
 - `scripts/run_paper.sh` — запуск пайплайна (автоматически устанавливает MODE=paper).
 - `scripts/run_paper_60m.sh` — 60-минутный прогон с логами и выгрузкой Parquet/summary в `reports/run_*/`.
+- `scripts/run_paper_24h.sh` — суточный paper-run (использует флаг `--max-seconds 86400`, перезапускается после фейла).
 - `scripts/run_live.sh` — заглушка, предупреждает и завершает выполнение.
+- `scripts/cleanup.py` — удаляет устаревшие `reports/run_*`, логи и `__pycache__` (по умолчанию держит 2 рана, 5 логов).
+- `scripts/vacuum_and_rotate.py` — выгружает старые run_id из SQLite в Parquet и выполняет VACUUM (ротация БД).
 

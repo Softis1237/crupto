@@ -23,10 +23,10 @@ else
 fi
 
 if [ -n "$TIMEOUT_CMD" ]; then
-  { eval "$TIMEOUT_CMD 3600 python -m prod_core.runner \"$@\""; } | tee "$LOG_FILE"
+  { $TIMEOUT_CMD 3600 python -m prod_core.runner --max-seconds 3600 "$@"; } | tee "$LOG_FILE"
   RUN_STATUS=${PIPESTATUS[0]}
 else
-  python -m prod_core.runner "$@" | tee "$LOG_FILE"
+  python -m prod_core.runner --max-seconds 3600 "$@" | tee "$LOG_FILE"
   RUN_STATUS=${PIPESTATUS[0]}
 fi
 

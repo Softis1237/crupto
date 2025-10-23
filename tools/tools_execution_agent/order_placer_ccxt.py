@@ -50,11 +50,20 @@ class OrderPlacerTool:
         slippage = float(kwargs.get("slippage") or 0.0)
         side = plan.signal.side
         price = plan.signal.metadata.get("entry_price")
+        
+        # Если цена не указана - используем рыночный ордер
+        order_type = "limit" if price is not None else "market"
+        
+        # Для лимитного ордера можно использовать последнюю известную цену
+        if price is None and order_type == "limit" and hasattr(context, "last_price"):
+            price = context.last_price
+            
         request = OrderRequest(
             symbol=context.symbol,
             side="buy" if side == "long" else "sell",
             quantity=plan.size,
             price=price,
+            order_type=order_type,
         )
         if self._dao is not None:
             origin_ts = int(plan.signal.timestamp.timestamp()) if hasattr(plan.signal, "timestamp") else int(time.time())

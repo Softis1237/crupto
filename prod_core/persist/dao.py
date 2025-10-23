@@ -171,7 +171,7 @@ class PersistDAO:
         meta: dict[str, Any] | None = None,
         run_id: str | None = None,
     ) -> None:
-        """пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅ client_id."""
+        """Update order status in-place using client_id as idempotency key."""
 
         updates: List[str] = ["status = ?", "updated_at = strftime('%s','now')"]
         params: List[Any] = [status]
@@ -230,7 +230,7 @@ class PersistDAO:
             )
 
     def insert_trade(self, payload: TradePayload) -> int:
-        """пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅ?пїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅ пїЅ?пїЅпїЅпїЅ?пїЅ?пїЅпїЅпїЅ%пїЅпїЅпїЅпїЅ'."""
+        """Insert trade execution record (fills, fees, realized PnL)."""
 
         run_id = self._resolve_run_id(payload.run_id)
         with self.transaction() as conn:
@@ -256,7 +256,7 @@ class PersistDAO:
             return int(cursor.lastrowid)
 
     def insert_equity_snapshot(self, payload: EquitySnapshotPayload) -> None:
-        """пїЅпїЅпїЅпїЅпїЅпїЅпїЅ equity пїЅ пїЅпїЅ-пїЅпїЅпїЅпїЅ."""
+        """Persist an equity snapshot for later analytics."""
 
         run_id = self._resolve_run_id(payload.run_id)
         with self.transaction() as conn:
@@ -278,7 +278,7 @@ class PersistDAO:
             )
 
     def insert_latency(self, payload: LatencyPayload) -> None:
-        """пїЅпїЅпїЅа ­пїЅпїЅ пїЅпїЅпїЅпїЅа§­пїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ."""
+        """Persist latency measurements for pipeline stages."""
 
         run_id = self._resolve_run_id(payload.run_id)
         with self.transaction() as conn:
@@ -291,7 +291,7 @@ class PersistDAO:
             )
 
     def fetch_latency(self, limit: int | None = None, run_id: str | None = None) -> List[Dict[str, Any]]:
-        """пїЅпїЅпїЅпїЅпїЅа¦°пїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅ latency."""
+        """Return latency entries ordered by timestamp."""
 
         resolved_run_id = self._resolve_run_id(run_id)
         query = "SELECT * FROM latency WHERE run_id = ? ORDER BY ts DESC"
@@ -393,7 +393,7 @@ class PersistDAO:
             )
 
     def fetch_equity_last(self, run_id: str | None = None) -> Optional[Dict[str, Any]]:
-        """Возвращает последний equity snapshot."""
+        """Return the latest equity snapshot for a run."""
 
         resolved_run_id = self._resolve_run_id(run_id)
         with self._connect() as conn:
@@ -401,7 +401,7 @@ class PersistDAO:
         return dict(row) if row else None
 
     def fetch_equity_history(self, limit: int | None = None, run_id: str | None = None) -> List[Dict[str, Any]]:
-        """Возвращает историю equity."""
+        """Return equity history ordered by recency for a run."""
 
         resolved_run_id = self._resolve_run_id(run_id)
         query = "SELECT * FROM equity_snapshots WHERE run_id = ? ORDER BY ts DESC"

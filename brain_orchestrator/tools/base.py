@@ -24,6 +24,7 @@ class ToolContext:
     mode: str
     symbol: str
     timeframe: str | None = None
+    last_price: float | None = None  # Последняя известная цена инструмента
 
 
 class BaseTool(Protocol):

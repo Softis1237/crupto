@@ -61,7 +61,14 @@ class BrainOrchestrator:
         symbol: str,
         timeframe: str,
     ) -> None:
-        tool_context = ToolContext(mode=mode, symbol=symbol, timeframe=timeframe)
+        # Получаем последнюю цену из свечей
+        last_price = float(candles['close'].iloc[-1]) if not candles.empty else None
+        tool_context = ToolContext(
+            mode=mode,
+            symbol=symbol,
+            timeframe=timeframe,
+            last_price=last_price
+        )
 
         start = time.perf_counter()
         features_map, regime = self.market_agent.run(tool_context, candles)

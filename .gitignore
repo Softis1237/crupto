@@ -1,3 +1,21 @@
 __pycache__/
+*.py[cod]
+.pytest_cache/
 .venv/
+.env
+.env.*
 
+# Persistent artifacts / local state
+storage/
+*.db
+*.sqlite
+*.parquet
+
+# Run outputs and logs
+logs/
+reports/run_*/
+reports/archive/
+
+# Misc tooling
+.DS_Store
+Thumbs.db

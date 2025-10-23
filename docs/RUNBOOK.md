@@ -4,7 +4,7 @@
 1. Заполнить `.env` (MODE=paper, sandbox API ключи, `PROMETHEUS_PORT`).
 2. Проверить конфиги: `python -c "from prod_core.configs import ConfigLoader; ConfigLoader().load_governance(); ConfigLoader().load_symbols()"`.
 3. Запустить Prometheus/Grafana (см. DEV_SETUP) и убедиться, что datasource Prometheus активен.
-4. Запустить пайплайн: `scripts/run_paper.sh` (варианты: `scripts/run_paper_60m.sh` для 60-минутного окна или `scripts/run_paper_24h.sh` для суточного прогона с выгрузками).
+4. Запустить пайплайн: `scripts/run_paper.sh` (варианты: `scripts/run_paper_60m.sh` для 60-минутного окна или `scripts/run_paper_24h.sh` для суточного прогона с выгрузками). Скрипты работают и без GNU `timeout`: runner ограничивается аргументом `--max-seconds`.
 5. В логе должно появиться сообщение о регистрации фида и старте Prometheus (`Prometheus exporter слушает порт ...`).
 
 ## Остановка
@@ -34,6 +34,12 @@
 - Параметры --keep-days (дней), --keep-runs (минимум последних run_id), есть режим --dry-run.
 - Новые run_id остаются в SQLite, старые выгружаются в Parquet/CSV и удаляются, затем выполняется VACUUM.
 - Перед ротацией убедитесь, что длительные запуски завершены и run_id архивированы с помощью export_run.
+
+## Очистка артефактов
+- После каждого paper-рана выполняйте `python scripts/cleanup.py` (по умолчанию хранит 2 последних каталога `reports/run_*` и 5 логов).
+- При необходимости задайте `--keep-runs`/`--keep-logs`; для проверки используйте `--dry-run`.
+- Убедитесь, что `storage/crupto.db`, `logs/` и временные csv/parquet не попадают в Git (см. `.gitignore`).
+- Перед запуском нового цикла удалите старые run-директории, чтобы Grafana/отчёты ссылались только на актуальные артефакты.
 
 
 Alertmanager конфиг-шаблон: `configs/alertmanager/config.sample.yml` (использует env `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID`). Правила Prometheus: `configs/prometheus/alerts.yml`.

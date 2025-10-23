@@ -107,7 +107,7 @@ class TelemetryExporter:
         )
         self.portfolio_safe_mode = Gauge(
             "portfolio_safe_mode",
-            "��������� safe-mode �������� (1 �������).",
+            "Portfolio safe-mode flag (1 enabled).",
             registry=self.registry,
         )
         self.runner_last_cycle_ts = Gauge(
@@ -146,7 +146,7 @@ class TelemetryExporter:
         self.dd_state.set(drawdown_pct)
 
     def record_daily_lock(self, locked: bool, reason: str | None = None) -> None:
-        """�������� ���ﭨ� daily-lock."""
+        """Record/update daily-lock state."""
 
         reason_label = (reason or "limits_ok").strip() or "limits_ok"
         if not locked:
@@ -203,7 +203,7 @@ class TelemetryExporter:
         self.portfolio_safe_mode.set(1 if enabled else 0)
 
     def record_cycle_heartbeat(self) -> None:
-        """�������� ������� �������� ����⮢ (��� deadman-alert)."""
+        """Update heartbeat timestamp for deadman alert."""
 
         self.runner_last_cycle_ts.set(time.time())
 
@@ -241,7 +241,7 @@ class TelemetryExporter:
             self.avg_win_r.set(0.0)
             self.avg_loss_r.set(0.0)
     def apply_alert_overrides(self) -> None:
-        """�������� ������������ alert override'ы (��� ��������)."""
+        """Apply alert overrides from environment (for testing)."""
 
         feed_override = os.getenv("ALERT_TEST_FEED_HEALTH")
         if feed_override:
