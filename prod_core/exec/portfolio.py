@@ -110,7 +110,18 @@ class PortfolioController:
         key = self._correlation_key(symbol_a, symbol_b)
         now = int(time.time())
         last = self._last_corr_timestamp.get(key, 0)
-        if key in self.correlations and (now - last) < self.limits.correlation_refresh_seconds:
+        previous = self.correlations.get(key)
+        threshold = self.limits.max_abs_correlation
+        crosses_threshold = False
+        if previous is not None:
+            previously_high = abs(previous) >= threshold
+            currently_high = abs(value) >= threshold
+            crosses_threshold = previously_high != currently_high
+        if (
+            previous is not None
+            and (now - last) < self.limits.correlation_refresh_seconds
+            and not crosses_threshold
+        ):
             return
         self.correlations[key] = value
         self._last_corr_timestamp[key] = now
@@ -206,6 +217,7 @@ class PortfolioController:
         if not self.safe_mode:
             logger.warning("Safe-mode entry: все пары corr>=%.2f (run=%s)", threshold, self.dao.run_id if self.dao else "n/a")
         self.safe_mode = True
+    @staticmethod
     def _correlation_key(symbol_a: str, symbol_b: str) -> Tuple[str, str]:
         if symbol_a <= symbol_b:
             return (symbol_a, symbol_b)

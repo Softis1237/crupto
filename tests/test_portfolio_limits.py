@@ -17,7 +17,7 @@ def test_gross_and_net_limits() -> None:
 
 
 def test_safe_mode_triggers_on_high_correlation() -> None:
-    controller = PortfolioController()
+    controller = PortfolioController(limits=PortfolioLimits(correlation_refresh_seconds=0))
     controller.begin_cycle(current_risk_pct=0.0)
     controller.register_position("BTC", risk_pct=0.6, notional_pct=30.0, direction=1, leverage=1.0)
     controller.update_correlation("BTC", "ETH", 0.85)
@@ -41,7 +41,7 @@ def test_safe_mode_blocks_when_action_block() -> None:
 
 
 def test_safe_mode_exits_when_correlation_drops() -> None:
-    controller = PortfolioController()
+    controller = PortfolioController(limits=PortfolioLimits(correlation_refresh_seconds=0))
     controller.begin_cycle(current_risk_pct=0.0)
     controller.register_position("BTC", risk_pct=0.4, notional_pct=20.0, direction=1, leverage=1.0)
     controller.update_correlation("BTC", "ETH", 0.9)
