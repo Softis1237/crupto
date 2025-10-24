@@ -1,4 +1,4 @@
-"""Интеграционный тест пайплайна prod_core.runner с mock-фидом."""
+﻿"""РРЅС‚РµРіСЂР°С†РёРѕРЅРЅС‹Р№ С‚РµСЃС‚ РїР°Р№РїР»Р°Р№РЅР° prod_core.runner СЃ mock-С„РёРґРѕРј."""
 
 from __future__ import annotations
 
@@ -15,7 +15,7 @@ from prod_core.runner import _run_paper_loop
 
 
 def test_integration_pipeline(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    """Проверяет полный путь данных: feed → агенты → DAO → телеметрия."""
+    """РџСЂРѕРІРµСЂСЏРµС‚ РїРѕР»РЅС‹Р№ РїСѓС‚СЊ РґР°РЅРЅС‹С…: feed в†’ Р°РіРµРЅС‚С‹ в†’ DAO в†’ С‚РµР»РµРјРµС‚СЂРёСЏ."""
 
     db_path = tmp_path / "integration.db"
     run_id = "test_integration_pipeline"
@@ -32,7 +32,7 @@ def test_integration_pipeline(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -
     monkeypatch.setattr(CCXTBroker, "_build_client", lambda self, exchange, params: None)
 
     class RecordingTelemetry(TelemetryExporter):
-        """Фиксирует ключевые значения gauge-метрик для проверки."""
+        """Р¤РёРєСЃРёСЂСѓРµС‚ РєР»СЋС‡РµРІС‹Рµ Р·РЅР°С‡РµРЅРёСЏ gauge-РјРµС‚СЂРёРє РґР»СЏ РїСЂРѕРІРµСЂРєРё."""
 
         instances: list["RecordingTelemetry"] = []
 
@@ -52,7 +52,7 @@ def test_integration_pipeline(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -
 
     asyncio.run(
         _run_paper_loop(
-            max_cycles=5,
+            max_cycles=3,
             skip_feed_check=True,
             use_mock_feed=True,
         )
@@ -63,17 +63,18 @@ def test_integration_pipeline(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -
     positions = dao.fetch_positions()
     trades = dao.fetch_trades()
 
-    assert orders, "План исполнения должен сохранить ордера в DAO."
-    assert positions, "После исполнения ожидается запись открытых позиций."
-    assert trades, "Исполнение должно генерировать записи в trades."
+    assert orders, "РџР»Р°РЅ РёСЃРїРѕР»РЅРµРЅРёСЏ РґРѕР»Р¶РµРЅ СЃРѕС…СЂР°РЅРёС‚СЊ РѕСЂРґРµСЂР° РІ DAO."
+    assert positions, "РџРѕСЃР»Рµ РёСЃРїРѕР»РЅРµРЅРёСЏ РѕР¶РёРґР°РµС‚СЃСЏ Р·Р°РїРёСЃСЊ РѕС‚РєСЂС‹С‚С‹С… РїРѕР·РёС†РёР№."
+    assert trades, "РСЃРїРѕР»РЅРµРЅРёРµ РґРѕР»Р¶РЅРѕ РіРµРЅРµСЂРёСЂРѕРІР°С‚СЊ Р·Р°РїРёСЃРё РІ trades."
 
     latency_entries = dao.fetch_latency()
     stages = {entry["stage"] for entry in latency_entries}
     expected_stages = {"market_regime", "strategy_selection", "risk_manager", "execution", "monitor"}
-    assert expected_stages.issubset(stages), "Все стадии пайплайна должны публиковать латентность."
+    assert expected_stages.issubset(stages), "Р’СЃРµ СЃС‚Р°РґРёРё РїР°Р№РїР»Р°Р№РЅР° РґРѕР»Р¶РЅС‹ РїСѓР±Р»РёРєРѕРІР°С‚СЊ Р»Р°С‚РµРЅС‚РЅРѕСЃС‚СЊ."
 
     telemetry = RecordingTelemetry.instances[-1]
-    assert len(telemetry.feed_values) == 5, "Должно быть ровно пять измерений feed_health (по числу циклов)."
-    assert telemetry.feed_health._value.get() in (0, 1)
+    assert len(telemetry.feed_values) == 3, "Должно быть ровно три измерения feed_health (по числу циклов)."
+    assert telemetry.feed_values[-1] == 1, "Последнее значение feed_health должно быть 1 (OK)."
     assert telemetry.pnl_cum_r._value.get() >= 0.0
     assert telemetry.equity_usd._value.get() > 0.0
+

@@ -6,5 +6,7 @@
 - [ ] Grafana Node Graph подсвечивает агентов/инструменты; панели latency и regime обновляются онлайн.
 - [x] E2E тест (mock feed → MarketRegime → StrategySelection → Risk → Execution) зелёный.
 - [ ] Risk-governor блокирует торговлю при достижении лимитов (max_daily_loss, kill_switch_drawdown_72h).
-- [ ] Research pipeline обеспечивает champion/challenger гейты и sandbox-изоляцию.
-- [ ] README, DEV_SETUP, RUNBOOK, TODO обновлены по итогам paper-прогона.
+- [x] Research pipeline обеспечивает champion/challenger гейты и sandbox-изоляцию.
+- [x] README, DEV_SETUP, RUNBOOK, TODO обновлены по итогам paper-прогона.
+
+

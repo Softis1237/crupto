@@ -7,6 +7,21 @@
 4. Запустить пайплайн: `scripts/run_paper.sh` (варианты: `scripts/run_paper_60m.sh` для 60-минутного окна или `scripts/run_paper_24h.sh` для суточного прогона с выгрузками). Скрипты работают и без GNU `timeout`: runner ограничивается аргументом `--max-seconds`. Для локального короткого теста допустимо использовать `.venv\Scripts\python -m prod_core.runner --max-seconds 180 --skip-feed-check --use-mock-feed` (только MODE=paper).
 5. В логе должно появиться сообщение о регистрации фида и старте Prometheus (`Prometheus exporter слушает порт ...`).
 
+## 24-часовой прогон
+1. Перед стартом очистите артефакты прошлых сессий:
+   - `python scripts/cleanup.py --keep-runs 1 --keep-logs 3`
+   - `python scripts/vacuum_and_rotate.py --db storage/crupto.db --keep-runs 2`
+2. Запустите `bash scripts/run_paper_24h.sh --feed-timeout 30` (Linux/WSL) или `powershell -ExecutionPolicy Bypass -File scripts/run_paper_24h.ps1 -MaxSeconds 86400 --feed-timeout 30` (Windows). Оба скрипта прокидывают дополнительные аргументы напрямую в runner. Скрипт:
+   - создаёт новый `RUN_ID` и директории `reports/run_<RUN_ID>` и `logs/`;
+   - ограничивает runner `--max-seconds 86400`;
+   - автоматически перезапускает цикл при падении (`MAX_RESTARTS` и `RESTART_DELAY_SEC` регулируют поведение);
+   - после завершения выполняет `python -m prod_core.persist.export_run` и удаляет старые `reports/run_*`, оставляя два свежих каталога.
+3. Во время работы следите за логом `logs/paper24_<RUN_ID>.log` и за алертами (`RunnerHeartbeatLost`, `PortfolioSafeModeStuck`).
+4. После остановки:
+   - убедитесь, что в `reports/run_<RUN_ID>/` есть `orders.csv`, `trades.csv`, `equity.csv`, `positions.csv`, `latency.csv`, `summary.md`;
+   - зафиксируйте результаты в `reports/summary_latest.md` и `reports/02_acceptance_checklist.md`;
+   - приложите экспортированные отчёты в Confluence/почту и обновите TODO.
+
 ## Остановка
 - Ctrl+C в терминале → runner ловит сигнал и завершает feed (`Paper-loop остановлен`).
 - Убедиться, что `feed_health` вернулся в `-1` (paused) и нет активных планов.

@@ -176,6 +176,7 @@ async def _run_paper_loop(
     max_cycles: int | None = None,
     skip_feed_check: bool = False,
     use_mock_feed: bool = False,
+    feed_timeout: float | None = None,
 ) -> None:
     mode = ensure_paper_mode()
     if use_mock_feed and mode != "paper":
@@ -266,16 +267,41 @@ async def _run_paper_loop(
         sleep_interval = min(sleep_interval, 0.5)
 
     async with feed:
-        if skip_feed_check:
+        effective_skip_check = skip_feed_check
+        symbol_timeframes = [(spec.name, tf) for spec in specs for tf in spec.timeframes]
+        if not effective_skip_check:
+            timeout_value = feed_timeout if feed_timeout and feed_timeout > 0 else None
+            if timeout_value is None:
+                await asyncio.gather(*(feed.wait_ready(symbol, tf) for symbol, tf in symbol_timeframes))
+                logger.info(
+                    "Фид инициализирован: %s | таймфреймы %s | exchange=%s",
+                    ", ".join(spec.name for spec in specs),
+                    ", ".join(sorted({tf for spec in specs for tf in spec.timeframes})),
+                    exchange_id,
+                )
+            else:
+                readiness = await asyncio.gather(
+                    *(feed.wait_ready(symbol, tf, timeout=timeout_value) for symbol, tf in symbol_timeframes)
+                )
+                not_ready = [f"{symbol}/{tf}" for (symbol, tf), ok in zip(symbol_timeframes, readiness) if not ok]
+                if not_ready:
+                    logger.warning(
+                        "Таймаут %.1f с при ожидании WebSocket: %s. Переключаемся на REST-поллинг.",
+                        timeout_value,
+                        ", ".join(not_ready),
+                    )
+                    if hasattr(feed, "force_rest_mode"):
+                        feed.force_rest_mode()  # type: ignore[attr-defined]
+                    effective_skip_check = True
+                else:
+                    logger.info(
+                        "Фид инициализирован: %s | таймфреймы %s | exchange=%s",
+                        ", ".join(spec.name for spec in specs),
+                        ", ".join(sorted({tf for spec in specs for tf in spec.timeframes})),
+                        exchange_id,
+                    )
+        if effective_skip_check:
             logger.warning("Пропускаем feed.wait_ready(): используем REST-backfill/мок-данные.")
-        else:
-            await asyncio.gather(*(feed.wait_ready(spec.name, tf) for spec in specs for tf in spec.timeframes))
-            logger.info(
-                "Фид инициализирован: %s | таймфреймы %s | exchange=%s",
-                ", ".join(spec.name for spec in specs),
-                ", ".join(sorted({tf for spec in specs for tf in spec.timeframes})),
-                exchange_id,
-            )
         start_ts = time.time()
         cycles = 0
         while not stop_event.is_set():
@@ -338,11 +364,27 @@ def main() -> None:
         action="store_true",
         help="подменяет CCXT-фид синтетическим генератором (MODE=paper)",
     )
+    parser.add_argument(
+        "--feed-timeout",
+        type=float,
+        default=None,
+        help="таймаут ожидания готовности фида (секунды)",
+    )
     args = parser.parse_args()
     max_seconds = _resolve_seconds(args.max_seconds)
     max_cycles = _resolve_cycles(args.max_cycles)
     skip_feed_check = bool(args.skip_feed_check) or _env_flag("SKIP_FEED_CHECK")
     use_mock_feed = bool(args.use_mock_feed) or _env_flag("USE_MOCK_FEED")
+    feed_timeout = args.feed_timeout if args.feed_timeout and args.feed_timeout > 0 else None
+    if feed_timeout is None:
+        env_feed_timeout = os.getenv("FEED_TIMEOUT")
+        if env_feed_timeout:
+            try:
+                parsed_timeout = float(env_feed_timeout)
+                if parsed_timeout > 0:
+                    feed_timeout = parsed_timeout
+            except ValueError:
+                logger.warning("Игнорируем некорректное значение FEED_TIMEOUT=%s", env_feed_timeout)
 
     try:
         asyncio.run(
@@ -351,6 +393,7 @@ def main() -> None:
                 max_cycles=max_cycles,
                 skip_feed_check=skip_feed_check,
                 use_mock_feed=use_mock_feed,
+                feed_timeout=feed_timeout,
             )
         )
     except KeyboardInterrupt:

@@ -1,12 +1,12 @@
-# DEV_SETUP
+п»ї# DEV_SETUP
 
-## Требования
+## РўСЂРµР±РѕРІР°РЅРёСЏ
 - Python 3.13.x
-- `pipx` или `uv` (рекомендуется), альтернативно `pip-tools`
-- Docker (для Prometheus + Grafana)
+- `pipx` РёР»Рё `uv` (СЂРµРєРѕРјРµРЅРґСѓРµС‚СЃСЏ), Р°Р»СЊС‚РµСЂРЅР°С‚РёРІРЅРѕ `pip-tools`
+- Docker (РґР»СЏ Prometheus + Grafana)
 - Git
 
-## Настройка окружения
+## РќР°СЃС‚СЂРѕР№РєР° РѕРєСЂСѓР¶РµРЅРёСЏ
 
 ### Windows (PowerShell)
 ```powershell
@@ -16,6 +16,8 @@ python -m pip install --upgrade pip
 pip install -r requirements.txt
 pip install -r requirements-dev.txt
 Copy-Item .env.example .env
+# Р”Р»СЏ bash-СЃРєСЂРёРїС‚РѕРІ СЂРµРєРѕРјРµРЅРґСѓРµС‚СЃСЏ РІРєР»СЋС‡РёС‚СЊ WSL (PowerShell РѕС‚ Р°РґРјРёРЅРёСЃС‚СЂР°С‚РѕСЂР°):
+# wsl --install Ubuntu
 ```
 
 ### Linux / macOS
@@ -28,12 +30,12 @@ pip install -r requirements-dev.txt
 cp .env.example .env
 ```
 
-Опционально можно синхронизировать зависимости через `uv`:
+РћРїС†РёРѕРЅР°Р»СЊРЅРѕ РјРѕР¶РЅРѕ СЃРёРЅС…СЂРѕРЅРёР·РёСЂРѕРІР°С‚СЊ Р·Р°РІРёСЃРёРјРѕСЃС‚Рё С‡РµСЂРµР· `uv`:
 ```bash
 uv sync
 ```
 
-## Проверка окружения
+## РџСЂРѕРІРµСЂРєР° РѕРєСЂСѓР¶РµРЅРёСЏ
 ```bash
 pytest --maxfail=1 --disable-warnings -q
 pytest --cov=prod_core --cov=brain_orchestrator --cov=tools --cov-report=term-missing
@@ -42,38 +44,40 @@ mypy .
 ```
 
 ## Prometheus + Grafana
-1. Убедитесь, что ~/.config/grafana (или каталог конфигурации) содержит `dashboards/grafana/datasources.yml` и `dashboard.json`. Можно смонтировать директорию `dashboards/grafана` в контейнер.
-2. Запустите стек (пример docker-compose):
+1. РЈР±РµРґРёС‚РµСЃСЊ, С‡С‚Рѕ ~/.config/grafana (РёР»Рё РєР°С‚Р°Р»РѕРі РєРѕРЅС„РёРіСѓСЂР°С†РёРё) СЃРѕРґРµСЂР¶РёС‚ `dashboards/grafana/datasources.yml` Рё `dashboard.json`. РњРѕР¶РЅРѕ СЃРјРѕРЅС‚РёСЂРѕРІР°С‚СЊ РґРёСЂРµРєС‚РѕСЂРёСЋ `dashboards/grafР°РЅР°` РІ РєРѕРЅС‚РµР№РЅРµСЂ.
+2. Р—Р°РїСѓСЃС‚РёС‚Рµ СЃС‚РµРє (РїСЂРёРјРµСЂ docker-compose):
    ```bash
    docker compose up prometheus grafana
    ```
-   либо вручную: `docker run --net=host prom/prometheus`, `docker run --net=host grafana/grafana`.
-3. В Prometheus добавьте таргет `http://localhost:9108/metrics` (port задаётся переменной `PROMETHEUS_PORT`).
-4. В Grafana импортируйте `dashboards/grafana/dashboard.json` и выберите datasource `Prometheus`.
+   Р»РёР±Рѕ РІСЂСѓС‡РЅСѓСЋ: `docker run --net=host prom/prometheus`, `docker run --net=host grafana/grafana`.
+3. Р’ Prometheus РґРѕР±Р°РІСЊС‚Рµ С‚Р°СЂРіРµС‚ `http://localhost:9108/metrics` (port Р·Р°РґР°С‘С‚СЃСЏ РїРµСЂРµРјРµРЅРЅРѕР№ `PROMETHEUS_PORT`).
+4. Р’ Grafana РёРјРїРѕСЂС‚РёСЂСѓР№С‚Рµ `dashboards/grafana/dashboard.json` Рё РІС‹Р±РµСЂРёС‚Рµ datasource `Prometheus`.
 
-## Запуск пайплайна
+## Р—Р°РїСѓСЃРє РїР°Р№РїР»Р°Р№РЅР°
 ```bash
 MODE=paper scripts/run_paper.sh
-# локальный smoke-тест (mock feed):
+# Р»РѕРєР°Р»СЊРЅС‹Р№ smoke-С‚РµСЃС‚ (mock feed):
 python -m prod_core.runner --max-seconds 180 --skip-feed-check --use-mock-feed
-# реальный paper-run (60 мин):
+# СЂРµР°Р»СЊРЅС‹Р№ paper-run (60 РјРёРЅ):
 python -m prod_core.runner --max-seconds 3600 --skip-feed-check
 ```
 
-PowerShell без bash:
+PowerShell Р±РµР· bash:
 ```powershell
 $env:MODE = 'paper'
 python -m prod_core.runner
-# короткий тест (mock feed):
+# РєРѕСЂРѕС‚РєРёР№ С‚РµСЃС‚ (mock feed):
 # $env:MODE = 'paper'; python -m prod_core.runner --max-seconds 180 --skip-feed-check --use-mock-feed
+# 24h-run СЃ Р°РІС‚РѕРїРµСЂРµР·Р°РїСѓСЃРєРѕРј:
+# powershell -ExecutionPolicy Bypass -File scripts\run_paper_24h.ps1 -MaxSeconds 86400 --feed-timeout 30
 ```
 
-Параметры в `.env`:
-- `PROMETHEUS_PORT` (по умолчанию 9108)
+РџР°СЂР°РјРµС‚СЂС‹ РІ `.env`:
+- `PROMETHEUS_PORT` (РїРѕ СѓРјРѕР»С‡Р°РЅРёСЋ 9108)
 - `EXCHANGE`, `EXCHANGE_API_KEY`, `EXCHANGE_API_SECRET` (sandbox)
-- `OPENAI_API_KEY` — опционально для исследовательских агентов.
+- `OPENAI_API_KEY` вЂ” РѕРїС†РёРѕРЅР°Р»СЊРЅРѕ РґР»СЏ РёСЃСЃР»РµРґРѕРІР°С‚РµР»СЊСЃРєРёС… Р°РіРµРЅС‚РѕРІ.
 
-## Pre-commit / статический анализ
+## Pre-commit / СЃС‚Р°С‚РёС‡РµСЃРєРёР№ Р°РЅР°Р»РёР·
 ```bash
 pip install pre-commit
 pre-commit install
@@ -83,13 +87,15 @@ pytest --maxfail=1 --disable-warnings -q
 pytest --cov=prod_core --cov=brain_orchestrator --cov=tools --cov-report=term-missing
 ```
 
-## Полезные команды
-- `scripts/run_paper.sh` — запуск пайплайна (автоматически устанавливает MODE=paper).
-- `scripts/run_paper_60m.sh` — 60-минутный прогон с логами и выгрузкой Parquet/summary в `reports/run_*/`.
-- `scripts/run_paper_24h.sh` — суточный paper-run (использует флаг `--max-seconds 86400`, перезапускается после фейла).
-- `scripts/run_live.sh` — заглушка, предупреждает и завершает выполнение.
-- `scripts/cleanup.py` — удаляет устаревшие `reports/run_*`, логи и `__pycache__` (по умолчанию держит 2 рана, 5 логов).
-- `scripts/vacuum_and_rotate.py` — выгружает старые run_id из SQLite в Parquet и выполняет VACUUM (ротация БД).
-- pytest tests/test_integration_pipeline.py -q — интеграционный smoke-тест runner'а с mock feed.
-- python - <<'PY' ... (см. reports/09_research_gate.md) — запуск research pipeline (run_backtests > select_champions).
+## РџРѕР»РµР·РЅС‹Рµ РєРѕРјР°РЅРґС‹
+- `scripts/run_paper.sh` вЂ” Р·Р°РїСѓСЃРє РїР°Р№РїР»Р°Р№РЅР° (Р°РІС‚РѕРјР°С‚РёС‡РµСЃРєРё СѓСЃС‚Р°РЅР°РІР»РёРІР°РµС‚ MODE=paper).
+- `scripts/run_paper_60m.sh` вЂ” 60-РјРёРЅСѓС‚РЅС‹Р№ РїСЂРѕРіРѕРЅ СЃ Р»РѕРіР°РјРё Рё РІС‹РіСЂСѓР·РєРѕР№ Parquet/summary РІ `reports/run_*/`.
+- `scripts/run_paper_24h.sh` вЂ” СЃСѓС‚РѕС‡РЅС‹Р№ paper-run (РёСЃРїРѕР»СЊР·СѓРµС‚ С„Р»Р°Рі `--max-seconds 86400`, РїРµСЂРµР·Р°РїСѓСЃРєР°РµС‚СЃСЏ РїРѕСЃР»Рµ С„РµР№Р»Р°).
+- `scripts\run_paper_24h.ps1` вЂ” PowerShell-Р°РЅР°Р»РѕРі РґР»СЏ Windows (РїРѕРґРґРµСЂР¶РёРІР°РµС‚ С‚Рµ Р¶Рµ Р°СЂРіСѓРјРµРЅС‚С‹ runner).
+- `scripts/run_live.sh` вЂ” Р·Р°РіР»СѓС€РєР°, РїСЂРµРґСѓРїСЂРµР¶РґР°РµС‚ Рё Р·Р°РІРµСЂС€Р°РµС‚ РІС‹РїРѕР»РЅРµРЅРёРµ.
+- `scripts/cleanup.py` вЂ” СѓРґР°Р»СЏРµС‚ СѓСЃС‚Р°СЂРµРІС€РёРµ `reports/run_*`, Р»РѕРіРё Рё `__pycache__` (РїРѕ СѓРјРѕР»С‡Р°РЅРёСЋ РґРµСЂР¶РёС‚ 2 СЂР°РЅР°, 5 Р»РѕРіРѕРІ).
+- `scripts/vacuum_and_rotate.py` вЂ” РІС‹РіСЂСѓР¶Р°РµС‚ СЃС‚Р°СЂС‹Рµ run_id РёР· SQLite РІ Parquet Рё РІС‹РїРѕР»РЅСЏРµС‚ VACUUM (СЂРѕС‚Р°С†РёСЏ Р‘Р”).
+- pytest tests/test_integration_pipeline.py -q вЂ” РёРЅС‚РµРіСЂР°С†РёРѕРЅРЅС‹Р№ smoke-С‚РµСЃС‚ runner'Р° СЃ mock feed.
+- python - <<'PY' ... (СЃРј. reports/09_research_gate.md) вЂ” Р·Р°РїСѓСЃРє research pipeline (run_backtests > select_champions).
+
 

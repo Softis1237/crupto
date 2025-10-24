@@ -184,6 +184,14 @@ class MarketDataFeed:
                 self._status[key] = FeedHealthStatus.PAUSED
                 self._ready[key] = asyncio.Event()
 
+    def force_rest_mode(self) -> None:
+        """Принудительно переключает фид на REST-поллинг."""
+
+        if not self._use_websocket:
+            return
+        logger.warning("Отключаем WebSocket для %s: переходим на REST-поллинг.", self.exchange_id)
+        self._use_websocket = False
+
     @staticmethod
     def _build_rest_client(exchange_id: str) -> ccxt.Exchange:
         try:

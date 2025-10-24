@@ -28,7 +28,7 @@ class PortfolioLimits:
     max_concurrent_r_pct: float = 1.1
     max_gross_exposure_pct: float = 300.0
     max_net_exposure_pct: float = 150.0
-    max_abs_correlation: float = 0.65
+    max_abs_correlation: float = 0.6
     max_high_corr_positions: int = 2
     safe_mode_r_multiplier: float = 0.5
     correlation_window_bars: int = 288
@@ -257,10 +257,9 @@ class PortfolioController:
             )
 
         self.safe_mode = True
-        excess = max(0.0, max_corr - threshold)
         denom = max(1e-6, 1.0 - threshold)
-        reduction = min(1.0, excess / denom)
-        multiplier = max(self.limits.safe_mode_r_multiplier, min(1.0, 1.0 - reduction))
+        raw_multiplier = 1.0 - max(0.0, max_corr - threshold) / denom
+        multiplier = max(self.limits.safe_mode_r_multiplier, min(1.0, raw_multiplier))
         self._safe_mode_multiplier = multiplier
         self._risk_cap_pct = self.limits.max_portfolio_r_pct * multiplier
 

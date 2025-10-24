@@ -8,10 +8,11 @@
 - `brain_orchestrator/` — агенты, ToolRegistry, этапы пайплайна.
 - `tools/` — инструменты, сгруппированные по агентам (capabilities).
 - `configs/` — YAML (`governance`, `enable_map`, `symbols`) + валидаторы Pydantic.
+- `research_lab/` — backtests (vectorbt_runner), CI champion-gate, результаты исследовательских пайплайнов.
 - `dashboards/` — Prometheus exporter helper + Grafana (`datasources.yml`, `dashboard.json`).
 - `docs/`, `reports/` — операционные инструкции, планы и чек-листы.
-- `scripts/` — запуск paper (`run_paper.sh`), 60-минутный прогон (`run_paper_60m.sh`), live-заглушка.
-- `tests/` — проверка фида, индикаторов, risk-engine, portfolio control, интеграционный цикл `_run_paper_loop`.
+- `scripts/` — запуск paper (`run_paper.sh`), 60-минутный прогон (`run_paper_60m.sh`), 24h-run (`run_paper_24h.sh`, `run_paper_24h.ps1`), live-заглушка.
+- `tests/` — проверка фида, индикаторов, risk-engine, portfolio control, интеграционный цикл `_run_paper_loop`, vectorbt pipeline и champion gate.
 
 ## Быстрый старт (Python 3.13)
 1. Убедитесь, что Python 3.13.x установлен (Windows: py -3.13 --version, Linux/macOS: python3.13 --version).
@@ -71,3 +72,7 @@ mypy .
 
 ## Acceptance
 Следуйте чек-листу `reports/02_acceptance_checklist.md`: ≥70% покрытия, 24h стабильного paper-запуска, kill-switch/daily-lock, Grafana с необходимыми метриками, обновлённые отчёты (`reports/summary_latest.md`).
+## Research pipeline
+- `python research_lab/backtests/vectorbt_runner.py --config configs/strategy_candidates.json --start 2024-01-01 --end 2024-04-01 --csv-root data/history --save-csv research_lab/results/backtests.csv --save-json research_lab/results/backtests.json`
+- `research_lab/pipeline_ci/champion_gate.py` → `select_champions` (порог PF IS/OOS, MaxDD, trades, corr).
+- После допуска champions обновляйте `configs/enable_map.yaml` и публикуйте отчёт (`reports/09_research_gate.md`).

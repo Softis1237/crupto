@@ -12,7 +12,7 @@ import pandas as pd
 
 @dataclass(slots=True)
 class ChampionCriteria:
-    """Допуски для перехода кандидата в paper-режим."""
+    """Минимальные требования для допуска стратегии в paper-режим."""
 
     min_pf_is: float = 1.3
     min_pf_oos: float = 1.1
@@ -23,16 +23,18 @@ class ChampionCriteria:
 
 @dataclass(slots=True)
 class CandidateResult:
+    """Набор метрик, рассчитанных для кандидата."""
+
     candidate_id: str
     metrics: Dict[str, float]
 
 
 NUMERIC_ALIASES = {
-    "pf": ("pf", "pf_is", "pf_in_sample"),
+    "pf_is": ("pf_is", "pf", "pf_in_sample"),
     "pf_oos": ("pf_oos", "pf_out_sample", "pf_out"),
     "max_dd": ("max_dd", "max_drawdown"),
     "corr": ("corr", "corr_with_portfolio"),
-    "trades": ("trades", "n_trades"),
+    "trades": ("trades", "n_trades", "total_trades"),
 }
 
 
@@ -48,7 +50,7 @@ def _extract_metric(metrics: Dict[str, float], keys: Tuple[str, ...], default: f
 
 def passes_gate(metrics: Dict[str, float], criteria: ChampionCriteria | None = None) -> bool:
     crit = criteria or ChampionCriteria()
-    pf_is = _extract_metric(metrics, NUMERIC_ALIASES["pf"])
+    pf_is = _extract_metric(metrics, NUMERIC_ALIASES["pf_is"])
     pf_oos = _extract_metric(metrics, NUMERIC_ALIASES["pf_oos"], default=pf_is)
     max_dd = _extract_metric(metrics, NUMERIC_ALIASES["max_dd"])
     corr = abs(_extract_metric(metrics, NUMERIC_ALIASES["corr"]))

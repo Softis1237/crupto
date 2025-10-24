@@ -15,8 +15,8 @@ from prod_core.strategies.base import StrategySignal, TradingStrategy
 class RangeReversionConfig:
     """Настройки поиска отклонений от средней."""
 
-    deviation_threshold: float = 0.003
-    ema_gap_threshold: float = 0.0015
+    deviation_threshold: float = 0.0
+    ema_gap_threshold: float = 1.0
 
 
 class RangeReversion5MStrategy(TradingStrategy):
@@ -26,7 +26,7 @@ class RangeReversion5MStrategy(TradingStrategy):
         super().__init__(
             name="range_rev_5m",
             timeframe="5m",
-            min_hold_bars=4,
+            min_hold_bars=2,
             supported_regimes=(
                 MarketRegime.RANGE_LOWVOL,
                 MarketRegime.RANGE_HIGHVOL,

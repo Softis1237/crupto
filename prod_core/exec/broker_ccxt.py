@@ -73,6 +73,11 @@ class CCXTBroker:
             return None
         api_key = os.getenv("EXCHANGE_API_KEY") or params.get("apiKey")
         secret = os.getenv("EXCHANGE_API_SECRET") or params.get("secret")
+        if not api_key or not secret:
+            logger.warning(
+                "EXCHANGE_API_KEY/EXCHANGE_API_SECRET не заданы — CCXTBroker работает в режиме симуляции."
+            )
+            return None
         options = {"enableRateLimit": True, **params.get("options", {})}
         client = getattr(ccxt, exchange)({"apiKey": api_key, "secret": secret, "options": options})
         client.set_sandbox_mode(True)

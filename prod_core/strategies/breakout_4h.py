@@ -16,8 +16,8 @@ from prod_core.strategies.base import StrategySignal, TradingStrategy
 class BreakoutConfig:
     """Параметры канала Дончиана для пробойной стратегии."""
 
-    channel_period: int = 20
-    min_breakout_factor: float = 0.002  # 0.2% от цены
+    channel_period: int = 10
+    min_breakout_factor: float = 0.0003  # 0.1% от цены
 
 
 class Breakout4HStrategy(TradingStrategy):
@@ -27,7 +27,7 @@ class Breakout4HStrategy(TradingStrategy):
         super().__init__(
             name="breakout_4h",
             timeframe="4h",
-            min_hold_bars=6,
+            min_hold_bars=3,
             supported_regimes=(MarketRegime.TREND_UP, MarketRegime.TREND_DOWN),
         )
         self._indicators = indicators or TechnicalIndicators()

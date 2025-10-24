@@ -15,8 +15,8 @@ from prod_core.strategies.base import StrategySignal, TradingStrategy
 class FundingReversionConfig:
     """Пороговые параметры для входа против перекошенного фондинга."""
 
-    funding_threshold: float = 0.004
-    min_confidence: float = 0.6
+    funding_threshold: float = 0.001
+    min_confidence: float = 0.5
 
 
 class FundingReversionStrategy(TradingStrategy):
@@ -26,7 +26,7 @@ class FundingReversionStrategy(TradingStrategy):
         super().__init__(
             name="funding_rev",
             timeframe="1h",
-            min_hold_bars=8,
+            min_hold_bars=4,
             supported_regimes=(
                 MarketRegime.RANGE_LOWVOL,
                 MarketRegime.RANGE_HIGHVOL,

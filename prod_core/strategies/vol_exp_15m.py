@@ -15,8 +15,8 @@ from prod_core.strategies.base import StrategySignal, TradingStrategy
 class VolatilityExpansionConfig:
     """Параметры детектора импульса."""
 
-    vol_threshold: float = 0.015
-    min_confidence: float = 0.55
+    vol_threshold: float = 0.004
+    min_confidence: float = 0.45
 
 
 class VolatilityExpansion15MStrategy(TradingStrategy):
@@ -26,7 +26,7 @@ class VolatilityExpansion15MStrategy(TradingStrategy):
         super().__init__(
             name="vol_exp_15m",
             timeframe="15m",
-            min_hold_bars=8,
+            min_hold_bars=4,
             supported_regimes=(
                 MarketRegime.TREND_UP,
                 MarketRegime.TREND_DOWN,

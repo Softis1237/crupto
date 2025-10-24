@@ -1,0 +1,36 @@
+{
+  "candidates": [
+    {
+      "candidate_id": "cand-breakout",
+      "strategy": "breakout_4h",
+      "symbol": "BTC/USDT:USDT",
+      "timeframe": "1h",
+      "channel_period": 12,
+      "min_breakout_factor": 0.0008
+    },
+    {
+      "candidate_id": "cand-range",
+      "strategy": "range_reversion_5m",
+      "symbol": "ETH/USDT:USDT",
+      "timeframe": "5m",
+      "deviation_threshold": 0.001,
+      "ema_gap_threshold": 0.005
+    },
+    {
+      "candidate_id": "cand-vole",
+      "strategy": "volatility_expansion_15m",
+      "symbol": "BTC/USDT:USDT",
+      "timeframe": "15m",
+      "vol_threshold": 0.008,
+      "min_confidence": 0.5
+    },
+    {
+      "candidate_id": "cand-funding",
+      "strategy": "funding_reversion",
+      "symbol": "ETH/USDT:USDT",
+      "timeframe": "1h",
+      "funding_threshold": 0.002,
+      "min_confidence": 0.55
+    }
+  ]
+}

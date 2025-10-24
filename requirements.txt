@@ -1,8 +1,9 @@
 # Runtime dependencies pinned for Python 3.13.x
-numpy==2.3.4
+numpy==2.2.6
 pandas==2.3.3
 ccxt==4.5.12
 loguru==0.7.3
 prometheus-client==0.23.1
 pydantic==2.12.3
 PyYAML==6.0.3
+vectorbt==0.28.1

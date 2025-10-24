@@ -1,0 +1,48 @@
+{
+  "results": [
+    {
+      "candidate_id": "cand-breakout",
+      "strategy": "breakout_4h",
+      "pf_is": 1.0664619392987422,
+      "pf_oos": 1.1679509146729246,
+      "max_dd": 0.14884819075760367,
+      "corr": 0.1454711108093331,
+      "trades": 136,
+      "start": "2024-01-01",
+      "end": "2024-04-01"
+    },
+    {
+      "candidate_id": "cand-range",
+      "strategy": "range_reversion_5m",
+      "pf_is": 0.9656889984090203,
+      "pf_oos": 1.0267598255602897,
+      "max_dd": 0.2261279310630001,
+      "corr": -0.0026443656597040077,
+      "trades": 6982,
+      "start": "2024-01-01",
+      "end": "2024-04-01"
+    },
+    {
+      "candidate_id": "cand-vole",
+      "strategy": "volatility_expansion_15m",
+      "pf_is": 0.5234995984808275,
+      "pf_oos": 0.18973191657085467,
+      "max_dd": 0.11171782280677081,
+      "corr": -0.02215357987440097,
+      "trades": 25,
+      "start": "2024-01-01",
+      "end": "2024-04-01"
+    },
+    {
+      "candidate_id": "cand-funding",
+      "strategy": "funding_reversion",
+      "pf_is": 0.0,
+      "pf_oos": 0.0,
+      "max_dd": 0.0,
+      "corr": 0.0,
+      "trades": 0,
+      "start": "2024-01-01",
+      "end": "2024-04-01"
+    }
+  ]
+}

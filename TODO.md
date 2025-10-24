@@ -1,14 +1,13 @@
 ﻿# TODO backlog
 
 ## must
-- Провести 60-мин и 24ч paper-прогоны, зафиксировать отчёты (`reports/run_*/`) и обновить Acceptance.
-- Запустить полный CI (ruff/mypy/pytest --cov) в GitHub Actions и удерживать покрытие ≥70%.
-- Формализовать research pipeline: связать `vectorbt_runner` с настоящими backtests, описать артефакты для `champion_gate`.
+- Провести 60-мин и 24h paper-прогоны с новыми параметрами, выгрузить отчёты (`reports/run_*/`), обновить Acceptance.
+- Автоматизировать safe-mode: rolling корреляции + алерты (Grafana, Prometheus, RUNBOOK).
+- Включить research pipeline (vectorbt_runner + champion_gate) в CI и формализовать артефакты.
 
 ## should
 - Настроить автоматическую очистку/архивацию SQLite + алерты по размеру базы.
-- Расширить telemetry/grafana (latency buckets, equity curve, safe-mode алерты) и описать реагирование в RUNBOOK.
-- Настроить alert-правила на рост корреляций (PortfolioSafeModeStuck, corr > 0.65) и связать с уведомлениями.
+- Расширить telemetry/Grafana (latency buckets, equity curve, safe-mode панели) и описать реагирование в RUNBOOK.
 - Подготовить CLI/management-команды для failover feed и пересчёта корреляций.
 
 ## nice
