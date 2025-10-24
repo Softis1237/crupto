@@ -12,6 +12,7 @@ import time
 from typing import Dict, Tuple
 
 import pandas as pd
+import logging
 
 from brain_orchestrator.brain import BrainOrchestrator
 from brain_orchestrator.tools import ToolRegistry
@@ -33,6 +34,43 @@ from prod_core.strategies import (
 )
 
 logger = logging.getLogger(__name__)
+
+
+def _load_dotenv_from_root() -> None:
+    """Load .env and .env.local from the repository root if present.
+
+    Existing environment variables are not overridden so values exported in
+    the shell still take precedence.
+    """
+    try:
+        root = Path(__file__).resolve().parents[1]
+    except Exception:
+        return
+    for name in (".env", ".env.local"):
+        path = root / name
+        if not path.exists():
+            continue
+        logger.info("Loading environment variables from %s", str(path))
+        try:
+            with path.open("r", encoding="utf-8") as fh:
+                for raw in fh:
+                    line = raw.strip()
+                    if not line or line.startswith("#"):
+                        continue
+                    if "=" not in line:
+                        continue
+                    key, val = line.split("=", 1)
+                    key = key.strip()
+                    val = val.strip()
+                    # remove surrounding quotes if present
+                    if (val.startswith("\"") and val.endswith("\"")) or (
+                        val.startswith("'") and val.endswith("'")
+                    ):
+                        val = val[1:-1]
+                    if key and os.getenv(key) is None:
+                        os.environ[key] = val
+        except Exception:
+            logger.exception("Failed to load env file: %s", str(path))
 
 
 def build_strategies() -> list[TradingStrategy]:
@@ -340,6 +378,10 @@ async def _run_paper_loop(
 
 def main() -> None:
     """Основная точка входа CLI."""
+    # Try to load .env/.env.local from repo root so users don't need to export
+    # credentials every time in an interactive shell. Existing env vars keep
+    # precedence.
+    _load_dotenv_from_root()
 
     parser = argparse.ArgumentParser(description="Paper-runner crupto.")
     parser.add_argument(
@@ -365,12 +407,20 @@ def main() -> None:
         help="подменяет CCXT-фид синтетическим генератором (MODE=paper)",
     )
     parser.add_argument(
+        "--mode",
+        choices=("paper", "live"),
+        help="режим запуска (альтернатива переменной окружения MODE)",
+    )
+    parser.add_argument(
         "--feed-timeout",
         type=float,
         default=None,
         help="таймаут ожидания готовности фида (секунды)",
     )
     args = parser.parse_args()
+    # Если режим передан через CLI, пробросим его в окружение для совместимости
+    if getattr(args, "mode", None):
+        os.environ["MODE"] = args.mode
     max_seconds = _resolve_seconds(args.max_seconds)
     max_cycles = _resolve_cycles(args.max_cycles)
     skip_feed_check = bool(args.skip_feed_check) or _env_flag("SKIP_FEED_CHECK")

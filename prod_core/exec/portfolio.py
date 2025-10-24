@@ -68,7 +68,11 @@ class PortfolioController:
         self._base_gross_exposure_pct = 0.0
         self._base_net_exposure_pct = 0.0
         self.dao = dao
-        self.base_equity = base_equity or float(os.getenv("PAPER_EQUITY", "10000"))
+        virtual_equity = float(os.getenv("VIRTUAL_EQUITY", "0"))
+        paper_equity = float(os.getenv("PAPER_EQUITY", "10000"))
+        self.base_equity = base_equity or (virtual_equity if os.getenv("USE_VIRTUAL_TRADING") else paper_equity)
+        self._is_virtual = bool(os.getenv("USE_VIRTUAL_TRADING"))
+        self._virtual_asset = os.getenv("VIRTUAL_ASSET", "")
         self.last_prices: Dict[str, float] = {}
         self.cum_pnl_r: float = 0.0
         self.cum_realized_usd: float = 0.0
@@ -339,6 +343,12 @@ class PortfolioController:
         if isclose(new_qty, 0.0, abs_tol=1e-8):
             self.dao.clear_position(symbol, run_id=self.dao.run_id if self.dao else None)
         else:
+            pos_meta = {
+                "last_price": price,
+                "qty": float(new_qty),
+                "price": float(price),
+                **({"virtual_asset": self._virtual_asset} if self._is_virtual else {})
+            }
             self.dao.upsert_position(
                 PositionPayload(
                     symbol=symbol,
@@ -348,7 +358,7 @@ class PortfolioController:
                     unrealized_pnl_r=unrealized_pnl_r,
                     realized_pnl_r=realized_pnl_r_symbol,
                     exposure_usd=exposure_usd,
-                    meta={"last_price": price},
+                    meta=pos_meta,
                     run_id=self.dao.run_id if self.dao else None,
                 )
             )
@@ -360,6 +370,12 @@ class PortfolioController:
             drawdown = self.peak_pnl_r - self.cum_pnl_r
             self.max_dd_r = max(self.max_dd_r, drawdown)
 
+        trade_meta = {
+            "qty_change": float(qty_change),
+            "side": side,
+            "price": float(price),
+            **({"virtual_asset": self._virtual_asset} if self._is_virtual else {})
+        }
         trade_payload = TradePayload(
             order_id=order_id,
             ts=ts,
@@ -369,7 +385,7 @@ class PortfolioController:
             price=price,
             fee=fee,
             pnl_r=pnl_r_trade,
-            meta={"qty_change": qty_change},
+            meta=trade_meta,
             run_id=self.dao.run_id if self.dao else None,
         )
         self.dao.insert_trade(trade_payload)

@@ -32,6 +32,23 @@ class TelemetryExporter:
         if self.csv_path:
             self.csv_path.parent.mkdir(parents=True, exist_ok=True)
 
+        # VST-specific metrics
+        self.vst_equity = Gauge(
+            "vst_equity",
+            "Current VST virtual equity value",
+            registry=self.registry
+        )
+        self.vst_pnl_day = Gauge(
+            "vst_pnl_day",
+            "Daily P&L in VST",
+            registry=self.registry
+        )
+        self.vst_gross_exposure = Gauge(
+            "vst_gross_exposure",
+            "Gross exposure in VST",
+            registry=self.registry
+        )
+
         self.agent_tool_state = Gauge(
             "agent_tool_state",
             "Состояние инструмента агента (0 off, 1 ok, 2 warn, 3 error)",
@@ -280,4 +297,10 @@ class TelemetryExporter:
             row = asdict(event)
             row["payload"] = str(row["payload"])
             writer.writerow(row)
+
+    def record_vst_metrics(self, equity: float, pnl_day: float, gross_exposure: float) -> None:
+        """Записывает метрики виртуальной торговли."""
+        self.vst_equity.set(equity)
+        self.vst_pnl_day.set(pnl_day)
+        self.vst_gross_exposure.set(gross_exposure)
 

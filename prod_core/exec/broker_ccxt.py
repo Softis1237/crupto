@@ -105,7 +105,7 @@ class CCXTBroker:
                         status="pending",
                         client_id=client_id,
                         exchange_id=self.exchange_id,
-                        meta={"mode": self.mode},
+                        meta={"mode": self.mode, **({"virtual_asset": os.getenv("VIRTUAL_ASSET")} if os.getenv("VIRTUAL_ASSET") else {})},
                         run_id=self.dao.run_id if hasattr(self.dao, 'run_id') else None,
                     )
                     order_id = self.dao.insert_order(order_payload)
@@ -216,11 +216,19 @@ class CCXTBroker:
 
         if not self.dao or order_id is None or already_filled:
             return
+        # Attach virtual asset metadata if configured so downstream reports
+        # and analytics can filter trades executed against a sandbox/virtual
+        # balance (e.g. VRT/VST in BingX virtual account).
+        meta = {"updated_by": "ccxt_broker"}
+        asset = os.getenv("VIRTUAL_ASSET")
+        if asset:
+            meta["virtual_asset"] = asset
         self.dao.update_order_status(
             client_id,
             status=status,
             price=price,
             qty=qty,
+            meta=meta,
         )
         status_lower = status.lower()
         if self.portfolio and qty > 0 and price > 0 and status_lower in {"filled", "closed"}:

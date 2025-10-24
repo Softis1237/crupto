@@ -1,0 +1,4 @@
+ccxt
+aiohttp
+pyyaml
+python-dotenv
