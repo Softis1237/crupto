@@ -87,6 +87,8 @@ class CCXTBroker:
         """Отправляет пакет заявок. В режиме-заглушке только логирует действия."""
 
         results: list[OrderResult] = []
+        virtual_asset = os.getenv("VIRTUAL_ASSET")
+        use_virtual = os.getenv("USE_VIRTUAL_TRADING", "").lower() in {"1", "true", "yes", "on"}
         for request in requests:
             client_id = request.client_id or self._build_client_id(request)
             order_id = None
@@ -95,6 +97,12 @@ class CCXTBroker:
             if self.dao:
                 existing = self.dao.fetch_order_by_client(client_id)
                 if existing is None:
+                    meta_payload: dict[str, Any] = {"mode": self.mode}
+                    if virtual_asset:
+                        meta_payload["virtual_asset"] = virtual_asset
+                    if use_virtual:
+                        meta_payload["use_virtual_trading"] = True
+
                     order_payload = OrderPayload(
                         ts=int(time.time()),
                         symbol=request.symbol,
@@ -105,7 +113,7 @@ class CCXTBroker:
                         status="pending",
                         client_id=client_id,
                         exchange_id=self.exchange_id,
-                        meta={"mode": self.mode, **({"virtual_asset": os.getenv("VIRTUAL_ASSET")} if os.getenv("VIRTUAL_ASSET") else {})},
+                        meta=meta_payload,
                         run_id=self.dao.run_id if hasattr(self.dao, 'run_id') else None,
                     )
                     order_id = self.dao.insert_order(order_payload)
@@ -123,12 +131,17 @@ class CCXTBroker:
             )
 
             if self._client is None:
+                raw_payload: dict[str, Any] = {"mode": "simulation", "order_id": order_id}
+                if virtual_asset:
+                    raw_payload["virtual_asset"] = virtual_asset
+                if use_virtual:
+                    raw_payload["use_virtual_trading"] = True
                 result = OrderResult(
                     client_id=client_id,
                     status="filled",
                     filled=request.quantity,
                     avg_price=request.price,
-                    raw={"mode": "simulation", "order_id": order_id},
+                    raw=raw_payload,
                 )
                 results.append(result)
                 self._finalize_fill(
@@ -157,6 +170,13 @@ class CCXTBroker:
                 )]
 
             params = {"postOnly": request.post_only}
+            if use_virtual:
+                params.update(
+                    {
+                        "virtual": True,
+                        **({"virtualAccountType": virtual_asset} if virtual_asset else {}),
+                    }
+                )
             try:
                 response = self._client.create_order(
                     symbol=request.symbol,
@@ -169,12 +189,19 @@ class CCXTBroker:
                 filled = float(response.get("filled", request.quantity))
                 avg_price = float(response.get("average", request.price or 0.0)) if response.get("average") else request.price
                 status = response.get("status", "open")
+                response_meta = dict(response)
+                response_meta["order_id"] = order_id
+                if virtual_asset:
+                    response_meta.setdefault("meta", {})["virtual_asset"] = virtual_asset
+                if use_virtual:
+                    response_meta["use_virtual_trading"] = True
+
                 result = OrderResult(
                     client_id=client_id,
                     status=status,
                     filled=filled,
                     avg_price=avg_price,
-                    raw={**response, "order_id": order_id},
+                    raw=response_meta,
                 )
                 results.append(result)
                 self._finalize_fill(
@@ -219,10 +246,12 @@ class CCXTBroker:
         # Attach virtual asset metadata if configured so downstream reports
         # and analytics can filter trades executed against a sandbox/virtual
         # balance (e.g. VRT/VST in BingX virtual account).
-        meta = {"updated_by": "ccxt_broker"}
+        meta = {"updated_by": "ccxt_broker", "mode": self.mode}
         asset = os.getenv("VIRTUAL_ASSET")
         if asset:
             meta["virtual_asset"] = asset
+        if os.getenv("USE_VIRTUAL_TRADING", "").lower() in {"1", "true", "yes", "on"}:
+            meta["use_virtual_trading"] = True
         self.dao.update_order_status(
             client_id,
             status=status,

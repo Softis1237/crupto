@@ -7,6 +7,7 @@
 - Safe-mode обновлён: порог корреляции 0.60, формула мультипликатора `1 - (corr - threshold)/(1 - threshold)` и документированная процедура реагирования.
 - Research pipeline: `vectorbt_runner` подключён к vectorbt 0.28.1, `champion_gate` читает новые метрики (pf_is/pf_oos/max_dd/corr/trades). В `research_lab/results/` сохраняются CSV/JSON с примером запуска.
 - CI (`.github/workflows/ci.yml`) ставит `requirements.txt`, выполняет smoke `python -m prod_core.runner --max-seconds 10 --skip-feed-check --use-mock-feed`, затем pytest+coverage и публикует `coverage.xml`.
+- Реализован paper VST режим: CCXTBroker и PortfolioController помечают виртуальные сделки, добавлен модуль `run_virtual_vst_cycle`, тест и 8-часовой скрипт `run_paper_vst.sh`.
 
 ## Создано / обновлено
 - `prod_core/runner.py`, `prod_core/data/feed.py`, `prod_core/exec/broker_ccxt.py`: логика `--feed-timeout`, REST-фолбэка, симуляция заявок без ключей.
@@ -15,6 +16,8 @@
 - `scripts/run_paper_24h.ps1`, обновлён `scripts/run_paper_24h.sh`, README, docs/DEV_SETUP.md, docs/RUNBOOK.md (PowerShell и WSL сценарии, очистка перед 24h-run).
 - `research_lab/backtests/vectorbt_runner.py`, `research_lab/pipeline_ci/champion_gate.py`, `configs/strategy_candidates.json`, `research_lab/results/backtests.{csv,json}` — рабочий research pipeline.
 - Новые тесты: `tests/test_vectorbt_runner.py`, `tests/test_champion_gate.py`, `tests/test_broker_fallback.py`, `tests/test_runner_feed_timeout.py`, обновлён `tests/test_integration_pipeline.py` (mock-feed smoke).
+- Добавлен `prod_core/exchanges/bingx_virtual.py`, расширен `bingx_adapter` (aiohttp, sandbox-маркеры) и `broker_ccxt`/`portfolio` для поддержки VST-метаданных.
+- Скрипт `scripts/run_paper_vst.sh` формирует 8-часовой paper-прогон, логи и Markdown-отчёт; интеграционный тест `tests/test_bingx_virtual_trade.py` проверяет виртуальные сделки без подключения к бирже.
 
 ## Прогон paper_test_observe (пример 3 мин, REST-backfill)
 - Run ID: `paper_test_observe`; ордера 1, сделки 1, PnL_R = 0.0.

@@ -1,1 +1,0 @@
-- 2025-10-22: Полная синхронизация ТЗ и инструкции; добавлены snake_case стандарты, .env и запуск, цветовая карта Grafana, data-quality гейты, гейты champion/challenger, словарь capabilities, Acceptance для MVP.

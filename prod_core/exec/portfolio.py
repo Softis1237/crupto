@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from collections import defaultdict
 import logging
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from math import isclose
 from typing import Dict, Tuple
 import os
@@ -18,6 +18,10 @@ from prod_core.persist import (
     PositionPayload,
     TradePayload,
 )
+
+
+def _env_flag(name: str) -> bool:
+    return os.getenv(name, "").lower() in {"1", "true", "yes", "on"}
 
 
 @dataclass(slots=True)
@@ -70,8 +74,9 @@ class PortfolioController:
         self.dao = dao
         virtual_equity = float(os.getenv("VIRTUAL_EQUITY", "0"))
         paper_equity = float(os.getenv("PAPER_EQUITY", "10000"))
-        self.base_equity = base_equity or (virtual_equity if os.getenv("USE_VIRTUAL_TRADING") else paper_equity)
-        self._is_virtual = bool(os.getenv("USE_VIRTUAL_TRADING"))
+        use_virtual = _env_flag("USE_VIRTUAL_TRADING")
+        self.base_equity = base_equity or (virtual_equity if use_virtual else paper_equity)
+        self._is_virtual = use_virtual
         self._virtual_asset = os.getenv("VIRTUAL_ASSET", "")
         self.last_prices: Dict[str, float] = {}
         self.cum_pnl_r: float = 0.0
